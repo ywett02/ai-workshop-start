@@ -7,7 +7,8 @@ export default defineConfig({
   snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
   ignoreSnapshots: process.platform !== 'linux',
   forbidOnly: !!process.env.CI,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  // The JSON results feed the pull request comment that shows changed screenshots.
+  reporter: [['list'], ['html', { open: 'never' }], ['json', { outputFile: 'test-results/results.json' }]],
   expect: { toHaveScreenshot: { maxDiffPixels: 0, threshold: 0 } },
   use: {
     browserName: 'chromium',

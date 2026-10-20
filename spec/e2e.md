@@ -17,6 +17,12 @@
   On other platforms the tests run and record videos but skip screenshot comparisons.
 - CI uploads the videos and the HTML report, including expected, actual, and diff images of any
   failed comparison, as the `e2e-results` artifact.
+- A failed comparison does not stop its test, so every changed key moment is reported. On pull
+  requests from this repository, CI keeps one comment up to date: each changed screenshot with
+  its pixel count and expected, actual, and diff images, other test failures, and how to accept
+  the change. When everything matches again, the comment says so. The images are committed to
+  the `e2e-diffs` branch, under the pull request and run, because comments cannot attach files.
+  `tests/e2e-report.test.ts` covers the comment.
 - To accept new baselines, add the `update-screenshots` label to the pull request, or run the
   Update screenshots workflow on a branch. It renders the screenshots in the CI image, commits
   any changes to the branch, starts CI for that commit, and removes the label. It refuses the
