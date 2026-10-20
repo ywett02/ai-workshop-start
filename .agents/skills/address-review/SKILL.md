@@ -1,26 +1,28 @@
 ---
 name: address-review
-description: Use when asked to address, fix, or respond to review comments or unresolved conversations on a pull request in this repository.
+description: Use when asked to address, fix, or respond to review comments or unresolved conversations on the open pull requests in this repository.
 ---
 
 # Address review
 
-Work through every unresolved review thread on a pull request: fix what is valid, reply in each thread, and resolve the threads you addressed.
+Scan the open pull requests and work through every unresolved review thread: fix what is valid, reply in each thread, and resolve the threads you addressed.
 
-## 1. Collect unresolved threads
+## 1. Find PRs with unresolved threads
 
-1. Check out the PR branch: `gh pr checkout <number>`, then `npm ci` in a fresh checkout.
-2. List the review threads (raise `first:` or paginate if a PR has more):
+1. List the open PRs with their review threads (raise `first:` or paginate if there are more):
 
    ```sh
-   gh api graphql -F owner='{owner}' -F repo='{repo}' -F pr=<number> -f query='
-     query($owner: String!, $repo: String!, $pr: Int!) {
+   gh api graphql -F owner='{owner}' -F repo='{repo}' -f query='
+     query($owner: String!, $repo: String!) {
        repository(owner: $owner, name: $repo) {
-         pullRequest(number: $pr) {
-           reviewThreads(first: 100) {
-             nodes {
-               id isResolved isOutdated path line
-               comments(first: 50) { nodes { author { login } body url } }
+         pullRequests(states: OPEN, first: 50) {
+           nodes {
+             number title url isCrossRepository
+             reviewThreads(first: 100) {
+               nodes {
+                 id isResolved isOutdated path line
+                 comments(first: 50) { nodes { author { login } body url } }
+               }
              }
            }
          }
@@ -28,8 +30,15 @@ Work through every unresolved review thread on a pull request: fix what is valid
      }'
    ```
 
-3. Keep the threads with `isResolved: false`. Also read top-level review bodies and PR comments (`gh pr view <number> --comments`); they cannot be resolved, but may ask for changes.
-4. Read the whole thread, the code it points to, and the relevant files in `spec/`. An outdated thread may already be fixed; check the current code before changing anything.
+2. Keep the PRs that have at least one thread with `isResolved: false`. If the user named specific PRs, keep only those.
+3. Skip PRs from forks (`isCrossRepository: true`), since you cannot push to them; list them in your final reply.
+4. Handle the remaining PRs one at a time, running steps 2–5 for each.
+
+For each PR:
+
+1. Check out its branch: `gh pr checkout <number>`, then `npm ci`.
+2. Also read top-level review bodies and PR comments (`gh pr view <number> --comments`); they cannot be resolved, but may ask for changes.
+3. For each unresolved thread, read the whole thread, the code it points to, and the relevant files in `spec/`. An outdated thread may already be fixed; check the current code before changing anything.
 
 ## 2. Decide on each thread
 
@@ -71,10 +80,10 @@ Answer top-level review or PR comments that asked for changes with one PR commen
 
 ## 5. Wait for CI
 
-`gh pr checks <number> --watch`. If it fails, read the logs (`gh run view <run-id> --log-failed`), fix, push, and wait again.
+`gh pr checks <number> --watch`. If it fails, read the logs (`gh run view <run-id> --log-failed`), fix, push, and wait again. Then move on to the next PR.
 
 ## Done when
 
-- Every unresolved thread has a reply, and every addressed thread is resolved.
-- `npm test` and `npm run typecheck` pass locally, and CI is green.
-- You reply with the PR link, the threads resolved, and the threads left open with why.
+- On every scanned PR, each unresolved thread has a reply, and each addressed thread is resolved.
+- `npm test` and `npm run typecheck` pass locally on each changed branch, and CI is green.
+- You reply with one line per PR: its link, the threads resolved, and the threads left open with why. List skipped PRs with the reason.
