@@ -35,7 +35,9 @@ without another scan. The CLI continues to scan individual
 repositories or local directories. `PORT` changes the listening port.
 
 Set `GITHUB_TOKEN` for a higher GitHub rate limit; the web server keeps it out of
-the browser. `npm test` runs the tests. For browser tests, install Chromium once
+the browser. `npm test` runs the tests. `npm run e2e` runs the demos as Playwright tests, records
+a video of each, and on CI compares their screenshots with Linux baselines
+([spec/e2e.md](spec/e2e.md)); add the `update-screenshots` label to a pull request to accept new ones. For browser tests, install Chromium once
 with `npx playwright install chromium` (on Linux, use `--with-deps` if needed).
 Alternatively, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to an existing Chromium
 executable when browser downloads are unavailable.
