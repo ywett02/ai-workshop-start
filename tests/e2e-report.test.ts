@@ -77,3 +77,35 @@ test('e2e report: a run without results says so', (t) => {
   assert.ok(failed);
   assert.match(comment, /### ❌ e2e produced no results/);
 });
+
+test('e2e report: real Playwright collection errors never report matching screenshots', (t) => {
+  const { comment, failed, images } = report(t, (directory) => {
+    const json = join(directory, 'results.json');
+    writeFileSync(join(directory, 'broken.spec.ts'), "throw new Error('collection failed');\n");
+    const config = join(directory, 'playwright.config.mjs');
+    writeFileSync(config, `export default {testDir: ${JSON.stringify(directory)}, reporter: [['json', {outputFile: ${JSON.stringify(json)}}]]};`);
+    const playwright = fileURLToPath(new URL('../node_modules/playwright/cli.js', import.meta.url));
+    const run = spawnSync(process.execPath, [playwright, 'test', '--config', config], { encoding: 'utf8' });
+    assert.equal(run.status, 1, run.stderr);
+    assert.ok(JSON.parse(readFileSync(json, 'utf8')).errors.length > 0);
+    return json;
+  });
+  assert.ok(failed);
+  assert.match(comment, /collection failed/);
+  assert.doesNotMatch(comment, /All screenshots match/);
+  assert.deepEqual(images, []);
+});
+
+test('e2e report: value-only global errors are retained alongside test errors', (t) => {
+  const { comment, failed } = report(t, (directory) => {
+    const path = results(directory, [{ title: 'test', status: 'failed', errors: ['test failed'] }]);
+    const json = JSON.parse(readFileSync(path, 'utf8'));
+    json.errors = [{ value: 'global failure' }];
+    writeFileSync(path, JSON.stringify(json));
+    return path;
+  });
+  assert.ok(failed);
+  assert.match(comment, /global failure/);
+  assert.match(comment, /test failed/);
+  assert.match(comment, /2 other failures/);
+});

@@ -14,9 +14,9 @@ type Changed = { test: string; snapshot: string; pixels: string; images: Record<
 
 const plain = (text: string) => text.replace(/\x1b\[[0-9;]*m/g, '');
 
-export function changes(report: { suites: Suite[] }) {
+export function changes(report: { suites: Suite[]; errors?: { message?: string; value?: string }[] }) {
   const changed: Changed[] = [];
-  const failures: string[] = [];
+  const failures: string[] = (report.errors ?? []).map(error => `Playwright: ${plain(error.message ?? error.value ?? 'Unknown global error').trim() || 'Unknown global error'}`);
   const visit = (suite: Suite) => {
     for (const spec of suite.specs ?? []) {
       // The last attempt decides the outcome.

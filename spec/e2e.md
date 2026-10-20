@@ -22,7 +22,13 @@
   its pixel count and expected, actual, and diff images, other test failures, and how to accept
   the change. When everything matches again, the comment says so. The images are committed to
   the `e2e-diffs` branch, under the pull request and run, because comments cannot attach files.
-  `tests/e2e-report.test.ts` covers the comment.
+  Global collection/configuration errors also produce a failed report, even with no suites.
+  After baseline acceptance dispatches CI, the report locates open same-repository PRs for that
+  branch and exact commit and refreshes their comments. Fork PRs, tags, and branches with no
+  matching open PR are skipped. An image publication that still fails after three push attempts
+  fails the job before posting links to those images.
+  `tests/e2e-report.test.ts` covers the comment; workflow integration tests cover targeting
+  and publication.
 - To accept new baselines, add the `update-screenshots` label to the pull request, or run the
   Update screenshots workflow on a branch. It renders the screenshots in the CI image, commits
   any changes to the branch, starts CI for that commit, and removes the label. It refuses the
