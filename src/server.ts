@@ -1,4 +1,4 @@
-import { createServer } from 'node:http';
+import { createServer, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { listGitHubOrganization, openGitHub, parseGitHubOrganization, parseGitHubUrl, type GitHubOptions, type KnownRepository } from './core/github.ts';
 import { AtlasError } from './core/errors.ts';
@@ -34,32 +34,54 @@ export function createWebServer(options: Options = {}) {
       skills: result.skills.map((skill) => ({ ...skill, link: skillLink(result.repository, skill), content: contents.get(skill.path) })),
     };
   }
-  async function scanOrganization(input: string) {
-    const listing = await listGitHubOrganization(input, github);
-    const results = new Map<string, Awaited<ReturnType<typeof scanRepository>>>();
-    const failures = new Map<string, string>();
+  type RepositoryScan = { id: string; result?: Awaited<ReturnType<typeof scanRepository>>; warnings: string[] };
+  /** At most four repositories at a time; each is reported as soon as it is done. */
+  async function scanRepositories(
+    listing: Awaited<ReturnType<typeof listGitHubOrganization>>,
+    report: (scan: RepositoryScan) => void,
+    cancelled = () => false,
+  ) {
     let next = 0;
     await Promise.all(Array.from({ length: Math.min(4, listing.repositories.length) }, async () => {
-      while (next < listing.repositories.length) {
+      while (next < listing.repositories.length && !cancelled()) {
         const index = next++;
         const id = listing.repositories[index];
+        let scan: RepositoryScan;
         try {
-          results.set(id, await scanRepository(`https://github.com/${id}`, listing.known[index]));
+          const result = await scanRepository(`https://github.com/${id}`, listing.known[index]);
+          scan = { id, result, warnings: result.warnings.map((warning) => `${id}: ${warning}`) };
         } catch (error) {
           const message = error instanceof AtlasError ? error.message : 'Unable to scan repository. Please try again.';
-          failures.set(id, `${id}: ${message}; skipped; results may omit project skills`);
+          scan = { id, warnings: [`${id}: ${message}; skipped; results may omit project skills`] };
         }
+        report(scan);
       }
     }));
-    const repositories = listing.repositories.flatMap((id) => results.has(id) ? [results.get(id)!] : []);
+  }
+  async function scanOrganization(input: string) {
+    const listing = await listGitHubOrganization(input, github);
+    const scans = new Map<string, RepositoryScan>();
+    await scanRepositories(listing, (scan) => scans.set(scan.id, scan));
+    const repositories = listing.repositories.flatMap((id) => scans.get(id)!.result ?? []);
     return {
       organization: listing.organization,
       repositoryCount: listing.repositories.length,
       repositories,
       skills: repositories.flatMap((result) => result.skills),
-      warnings: [...listing.warnings, ...listing.repositories.flatMap((id) =>
-        failures.has(id) ? [failures.get(id)!] : results.get(id)!.warnings.map((warning) => `${id}: ${warning}`))],
+      warnings: [...listing.warnings, ...listing.repositories.flatMap((id) => scans.get(id)!.warnings)],
     };
+  }
+  /** One JSON line per event, so the page can show repositories while the rest are scanned. */
+  async function streamOrganization(input: string, response: ServerResponse) {
+    const listing = await listGitHubOrganization(input, github);
+    response.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8' });
+    const line = (event: unknown) => response.write(`${JSON.stringify(event)}\n`);
+    line({ type: 'start', organization: listing.organization, repositoryCount: listing.repositories.length, warnings: listing.warnings });
+    // A page that starts another scan closes this one; stop starting repositories for it.
+    let closed = false;
+    response.on('close', () => { closed = true; });
+    await scanRepositories(listing, (scan) => line({ type: 'repository', ...scan }), () => closed);
+    response.end(`${JSON.stringify({ type: 'done' })}\n`);
   }
   return createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -83,7 +105,8 @@ export function createWebServer(options: Options = {}) {
             json(400, { error: 'Enter a GitHub organization name or URL, such as https://github.com/JetBrains. Choose only one scan target.' });
             return;
           }
-          json(200, await scanOrganization(input));
+          if (request.headers.accept?.includes('application/x-ndjson')) await streamOrganization(input, response);
+          else json(200, await scanOrganization(input));
           return;
         }
         const input = (url.searchParams.get('repository') ?? '').trim();
@@ -103,6 +126,10 @@ export function createWebServer(options: Options = {}) {
       response.writeHead(200, { 'Content-Type': asset[1] });
       response.end(bytes);
     } catch (error) {
+      if (response.headersSent) {
+        response.destroy();
+        return;
+      }
       json(error instanceof AtlasError ? 502 : 500, {
         error: error instanceof AtlasError ? error.message : 'Unable to scan the repository or organization. Please try again.',
       });

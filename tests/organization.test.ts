@@ -180,3 +180,44 @@ test('organization HTTP scan preserves healthy repositories when a response body
   assert.match(result.warnings[0], /Example\/alpha: Unable to scan repository.*skipped; results may omit project skills/);
   assert.equal(JSON.stringify(result).includes('private transport details'), false);
 });
+
+test('organization stream reports each repository as soon as it is scanned, then the end', async (t) => {
+  const { createWebServer } = await import('../src/server.ts');
+  const { replay } = await import('../src/core/replay.ts');
+  const recording = organizationRecording();
+  const recorded = replay(recording);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  // alpha is held back, so the other repositories must arrive first.
+  const app = await listen(createWebServer({ github: { fetch: async (url, init) => {
+    if (url === `${API}/repos/${ORG}/alpha/commits/main`) await gate;
+    return recorded(url, init);
+  } } }));
+  t.after(app.close);
+  const response = await fetch(`${app.url}/api/scan?organization=${ORG}`, { headers: { Accept: 'application/x-ndjson' } });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type') ?? '', /application\/x-ndjson/);
+  const events: { type: string; id?: string; result?: WebRepository; warnings?: string[]; repositoryCount?: number }[] = [];
+  let buffered = '';
+  for await (const chunk of response.body!.pipeThrough(new TextDecoderStream())) {
+    const lines = (buffered + chunk).split('\n');
+    buffered = lines.pop()!;
+    events.push(...lines.map((line) => JSON.parse(line)));
+    if (events.filter((e) => e.type === 'repository').length === 3) release();
+  }
+  assert.deepEqual(events.map((e) => e.type), ['start', 'repository', 'repository', 'repository', 'repository', 'done']);
+  assert.equal(events[0].repositoryCount, 4);
+  assert.equal(events.at(-2)!.id, `${ORG}/alpha`);
+  assert.equal(events.at(-2)!.result!.skills[0].id, `${ORG}/alpha:${PATH}`);
+  assert.match(events.find((e) => e.id === `${ORG}/broken`)!.warnings!.join(), /Example\/broken:.*Repository not found.*skipped/);
+});
+
+test('organization stream reports a missing organization as an ordinary retryable error', async (t) => {
+  const recording = organizationRecording();
+  recording[orgUrl] = { status: 404, body: { message: 'Not Found' } };
+  const app = await organizationFixture(recording);
+  t.after(app.close);
+  const response = await fetch(`${app.url}/api/scan?organization=${ORG}`, { headers: { Accept: 'application/x-ndjson' } });
+  assert.equal(response.status, 502);
+  assert.match((await response.json() as { error: string }).error, /Organization not found/);
+});

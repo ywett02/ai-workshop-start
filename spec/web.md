@@ -64,6 +64,15 @@ recorded/local sources rather than live GitHub contents.
   repository results, flattened skills, and warnings. Order repositories by ID
   using case-sensitive comparison and skills within each repository by the usual
   name/path order. Preserve distinct IDs for same-named skills across repositories.
+- Show results while the organization is scanned. With `Accept: application/x-ndjson`
+  the organization scan answers one JSON object per line: `start` (organization,
+  repository count, listing warnings), then `repository` as each repository
+  finishes (its ID, its result unless it failed, and its warnings), then `done`.
+  Errors before `start` are ordinary JSON errors. The page inserts each repository
+  in ID order, shows how many repositories have been checked and skills found so
+  far, and keeps the filter, selection, and keyboard focus as results arrive. A
+  stream that ends without `done` keeps the results so far and reports that they
+  may be incomplete. When the page disconnects, no further repositories are started.
 - Use the existing repository discovery, copy grouping, metadata, source, and
   commit-pinned links. Display repository headings (including repositories with zero skills),
   per-repository counts and commits, a total skill count, and the selected skill's
