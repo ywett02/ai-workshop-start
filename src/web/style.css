@@ -34,6 +34,12 @@ button { cursor: pointer; }
 h2 { font-size: 15px; font-weight: 650; margin: 0; }
 .badge { background: #eaf0e9; color: #58775f; padding: 3px 8px; border-radius: 5px; font-size: 11px; }
 .repository-info { font-size: 11px; color: #8a958b; padding: 0 21px 20px; overflow-wrap: anywhere; border-bottom: 1px solid #e7ece6; }
+#skill-filter { padding: 16px 20px 0; }
+.filter-row { display: flex; align-items: center; gap: 7px; }
+#filter-query { width: 100%; border: 1px solid #d8e1d9; border-radius: 5px; padding: 8px; background: white; font-size: 12px; }
+#clear-filter { flex-shrink: 0; border: 1px solid #d8e1d9; border-radius: 5px; padding: 8px; color: #3a785a; background: white; font-size: 11px; }
+#filter-status { font-size: 11px; color: #68786d; margin: 9px 0 0; }
+mark { background: #ffe6a0; color: #263631; border-radius: 3px; }
 #skill-list { padding: 10px; max-height: 600px; overflow-y: auto; }
 .list-empty { padding: 13px; font-size: 12px; color: #939e94; line-height: 1.7; }
 .skill-item { width: 100%; display: block; border: 1px solid transparent; border-radius: 7px; background: transparent; padding: 14px 12px; text-align: left; color: #334b3c; margin-bottom: 5px; }
@@ -41,6 +47,7 @@ h2 { font-size: 15px; font-weight: 650; margin: 0; }
 .skill-item[aria-current=true] { border-color: #c7ddce; background: #eaf3eb; }
 .skill-item strong { display: block; font-size: 12px; overflow-wrap: anywhere; }
 .skill-item span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px; line-height: 1.7; color: #819082; margin-top: 6px; overflow-wrap: anywhere; }
+.skill-item .matching-description { display: block; max-height: 120px; overflow-y: auto; }
 .document-pane { min-width: 0; }
 .document-empty { min-height: 455px; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 25px; }
 .file-symbol { display: grid; place-items: center; font-size: 30px; width: 59px; height: 65px; background: #f1f5ef; border: 1px solid #dfe8dc; border-radius: 12px; color: #829e80; margin-bottom: 22px; }

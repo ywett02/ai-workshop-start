@@ -26,6 +26,11 @@
       <aside class="skills-pane">
         <div class="pane-heading"><h2>Skills</h2><span id="skill-count" class="badge">0</span></div>
         <div id="repository-info" class="repository-info">No repository selected</div>
+        <div id="skill-filter" hidden>
+          <label for="filter-query">Filter skills</label>
+          <div class="filter-row"><input id="filter-query" type="search" placeholder="Name or description…" autocomplete="off" spellcheck="false" aria-controls="skill-list" aria-describedby="filter-status"><button id="clear-filter" type="button">Clear filter</button></div>
+          <p id="filter-status" role="status" aria-live="polite" aria-atomic="true"></p>
+        </div>
         <nav id="skill-list" aria-label="Skills"><p class="list-empty">Your repository’s skills will appear here.</p></nav>
       </aside>
       <section class="document-pane" aria-label="Selected skill">

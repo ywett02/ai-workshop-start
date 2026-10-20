@@ -12,7 +12,7 @@ export const FILES: Record<string, string> = {
   'agent/skills/z-broken/SKILL.md': '# Instructions without front matter\n',
 };
 
-export async function webFixture() {
+export async function webFixture(files: Record<string, string> = FILES) {
   const reads: string[] = [];
   const server = createWebServer({ open: async (input) => {
     if (input.endsWith('/missing')) throw new AtlasError('Repository not found: https://github.com/Test/missing');
@@ -20,11 +20,11 @@ export async function webFixture() {
     const empty = input.endsWith('/empty');
     const source: Source = {
       repository: { id: 'Test/skills', organization: 'Test', name: 'skills', url: 'https://github.com/Test/skills', commit: COMMIT },
-      paths: empty ? [] : [...Object.keys(FILES), '.agents/skills/unreadable/SKILL.md', 'product/skills/ignored/SKILL.md'],
+      paths: empty ? [] : [...Object.keys(files), '.agents/skills/unreadable/SKILL.md', 'product/skills/ignored/SKILL.md'],
       warnings: empty ? [] : ['GitHub search is incomplete and may omit project skills'],
       read: async (path) => {
         reads.push(path);
-        return FILES[path] === undefined ? undefined : new TextEncoder().encode(FILES[path]);
+        return files[path] === undefined ? undefined : new TextEncoder().encode(files[path]);
       },
     };
     return source;
