@@ -7,6 +7,8 @@ description: Use when asked to address, fix, or respond to review comments or un
 
 Update the existing open pull requests with fixes for their unresolved review threads. Push the fixes to each PR's own branch, reply in each thread, and resolve the threads you addressed. Never open a new PR or a separate fix branch.
 
+Other agents may run this skill at the same time. A 👀 (`EYES`) reaction on a thread's last comment means an agent has claimed it; never work on a claimed thread.
+
 ## 1. Find PRs with unresolved threads
 
 1. List the open PRs with their review threads (raise `first:` or paginate if there are more):
@@ -21,7 +23,9 @@ Update the existing open pull requests with fixes for their unresolved review th
              reviewThreads(first: 100) {
                nodes {
                  id isResolved isOutdated path line
-                 comments(first: 50) { nodes { author { login } body url } }
+                 comments(last: 50) {
+                   nodes { id author { login } body url reactions(content: EYES) { totalCount } }
+                 }
                }
              }
            }
@@ -30,7 +34,7 @@ Update the existing open pull requests with fixes for their unresolved review th
      }'
    ```
 
-2. Keep the PRs that have at least one thread with `isResolved: false`. If the user named specific PRs, keep only those.
+2. A thread is open for work when `isResolved: false` and its last comment has no 👀 reaction (`reactions.totalCount == 0`). Keep the PRs that have at least one such thread. If the user named specific PRs, keep only those.
 3. Skip PRs from forks (`isCrossRepository: true`), since you cannot push to them; list them in your final reply.
 4. Handle the remaining PRs one at a time, running steps 2–5 for each.
 
@@ -38,7 +42,19 @@ For each PR:
 
 1. Check out its branch: `gh pr checkout <number>`, then `npm ci`. Run `git pull` so you start from the PR's latest commit.
 2. Also read top-level review bodies and PR comments (`gh pr view <number> --comments`); they cannot be resolved, but may ask for changes.
-3. For each unresolved thread, read the whole thread, the code it points to, and the relevant files in `spec/`. An outdated thread may already be fixed; check the current code before changing anything.
+3. Claim each thread open for work before touching it (see [Claim](#claim)). Then re-query the threads: if another 👀 or a new comment appeared on a thread meanwhile, leave that thread to the other agent and remove your reaction.
+4. For each claimed thread, read the whole thread, the code it points to, and the relevant files in `spec/`. An outdated thread may already be fixed; check the current code before changing anything.
+
+## Claim
+
+React 👀 on the thread's last comment (`<comment-id>` is that comment's `id`):
+
+```sh
+gh api graphql -F id=<comment-id> -f query='
+  mutation($id: ID!) { addReaction(input: {subjectId: $id, content: EYES}) { reaction { content } } }'
+```
+
+If you stop before replying in a claimed thread (the user decides to skip it, or you abort), release it with the same mutation using `removeReaction` so another agent can pick it up.
 
 ## 2. Decide on each thread
 
@@ -57,7 +73,7 @@ Verify each claim against the code before acting; do not accept or reject a comm
 
 ## 4. Reply and resolve
 
-Reply in every unresolved thread, then resolve only the ones you addressed:
+Reply in every thread you claimed, then resolve only the ones you addressed. For a thread you leave open, react 👀 on your own reply (as in [Claim](#claim)), so it stays claimed until the reviewer answers with a new comment:
 
 ```sh
 gh api graphql -F id=<thread-id> -f body='<reply>' -f query='
@@ -85,6 +101,6 @@ Answer top-level review or PR comments that asked for changes with one PR commen
 ## Done when
 
 - Every fix is pushed to the existing PR it belongs to.
-- On every scanned PR, each unresolved thread has a reply, and each addressed thread is resolved.
+- Each thread you claimed has a reply; each addressed thread is resolved, and each thread left open has 👀 on your reply. Threads claimed by other agents were not touched.
 - `npm test` and `npm run typecheck` pass locally on each changed branch, and CI is green.
-- You reply with one line per PR: its link, the threads resolved, and the threads left open with why. List skipped PRs with the reason.
+- You reply with one line per PR: its link, the threads resolved, the threads left open with why, and the threads skipped because another agent claimed them. List skipped PRs with the reason.
