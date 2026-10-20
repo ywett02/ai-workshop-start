@@ -32,7 +32,8 @@ Keep the change scoped to the issue. Note unrelated problems in the PR descripti
 2. `gh pr create --base main` with:
    - a short summary of the change and why;
    - `Closes #<number>`;
-   - a test plan listing the commands run and their results.
+   - a test plan listing the commands run and their results;
+   - for a UI change, a screenshot (or a short video for interactions and animations) of the new behavior, with a before/after pair when it changes existing UI. Capture it from the running app, not a mockup. `gh` cannot upload media, so if you cannot attach it yourself, say so in your reply and ask the user to add it.
 3. Wait for CI: `gh pr checks <pr> --watch`. If it fails, read the logs (`gh run view <run-id> --log-failed`), fix, push, and wait again.
 
 ## Done when
@@ -40,4 +41,5 @@ Keep the change scoped to the issue. Note unrelated problems in the PR descripti
 - Every acceptance criterion is in `spec/` and covered by an integration test.
 - `npm test` and `npm run typecheck` pass locally.
 - CI is green on the PR.
+- For a UI change, the PR shows it in a screenshot or video.
 - You reply with the PR link, a one-line summary, and anything left open (assumptions, follow-ups, unverified behavior).
