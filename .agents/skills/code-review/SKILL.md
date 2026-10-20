@@ -34,5 +34,5 @@ If the pull request already has a comment for the same finding, reply in that th
 
 Always post one short top-level comment on the pull request (`gh pr review <number> --comment --body ...`). For a local review without a pull request, put the same summary in your response.
 
-- Without blocking findings, including when only non-blocking findings exist, the summary is exactly `LGTM` and nothing else.
+- Without blocking findings, including when only non-blocking findings exist, the summary starts with `LGTM`. Add a short note after it only when useful, such as a material verification gap or a pointer to the non-blocking comments.
 - With blocking findings: their count, a one-line description of each, and material verification gaps, such as tests not run or a browser flow not exercised.
