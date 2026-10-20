@@ -11,6 +11,8 @@ export type Source = {
   warnings: string[];
   /** The file's bytes, or undefined if it is not there. */
   read(path: string): Promise<Uint8Array | undefined>;
+  /** Latest commit affecting this file at the scanned revision; requested only by the web view. */
+  lastUpdated?(path: string): Promise<string | undefined>;
 };
 
 export type ScanResult = { repository: Repository; skills: Skill[]; warnings: string[] };

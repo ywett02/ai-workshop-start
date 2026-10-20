@@ -77,6 +77,9 @@ export function githubRecording(
     const mode = modes[path] ?? '100644';
     entries.push({ path, mode, type: 'blob', sha });
     recording[rawUrl(id, path)] = answer;
+    recording[`${API}/repos/${id}/commits?sha=${EXAMPLE_COMMIT}&path=${encodeURIComponent(path)}&per_page=1`] = {
+      status: 200, body: [{ commit: { committer: { date: '2025-03-12T14:30:00Z' } } }],
+    };
     // Metadata is available if the scanner verifies a search hit's file type.
     recording[`${API}/repos/${id}/contents/${path}?ref=${EXAMPLE_COMMIT}`] = answer.status === 200 ? {
       status: 200,

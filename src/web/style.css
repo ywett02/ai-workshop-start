@@ -59,6 +59,7 @@ mark { background: #ffe6a0; color: #263631; border-radius: 3px; }
 .document-heading .eyebrow { font-size: 9px; margin-bottom: 9px; }
 #skill-name { font-size: 21px; overflow-wrap: anywhere; }
 #source-link { flex-shrink: 0; font-size: 11px; text-decoration: none; color: #3a785a; border: 1px solid #dbe6da; padding: 8px 10px; border-radius: 5px; }
+#skill-updated { color: #68786d; font-size: 12px; line-height: 1.8; }
 #skill-description { color: #7b8778; font-size: 12px; line-height: 1.8; white-space: pre-wrap; }
 #skill-path, #skill-copies { color: #83907e; font: 10px/1.8 ui-monospace, monospace; overflow-wrap: anywhere; }
 .code-heading { display: flex; justify-content: space-between; background: #243930; color: #c0d3c4; padding: 12px 16px; border-radius: 7px 7px 0 0; font: 10px ui-monospace, monospace; margin-top: 23px; }

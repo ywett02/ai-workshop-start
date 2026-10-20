@@ -29,10 +29,27 @@ export function createWebServer(options: Options = {}) {
         return bytes;
       },
     });
-    return {
-      ...result,
-      skills: result.skills.map((skill) => ({ ...skill, link: skillLink(result.repository, skill), content: contents.get(skill.path) })),
-    };
+    // History is optional enrichment. Bound requests and keep skills usable if it fails.
+    const skills = [];
+    for (let index = 0; index < result.skills.length; index += 4) {
+      const batch = await Promise.all(result.skills.slice(index, index + 4).map(async (skill) => {
+        let lastUpdated: string | null = null;
+        try {
+          const date = await source.lastUpdated?.(skill.path);
+          if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(date) && Number.isFinite(Date.parse(date))) {
+            lastUpdated = new Date(date).toISOString();
+          }
+        } catch {
+          // Do not expose unexpected errors or credentials in warnings.
+        }
+        return { ...skill, lastUpdated, link: skillLink(result.repository, skill), content: contents.get(skill.path) };
+      }));
+      skills.push(...batch);
+    }
+    for (const skill of skills) {
+      if (!skill.lastUpdated) result.warnings.push(`${skill.path}: last updated date unavailable`);
+    }
+    return { ...result, skills };
   }
   type RepositoryScan = { id: string; result?: Awaited<ReturnType<typeof scanRepository>>; warnings: string[] };
   /** At most four repositories at a time; each is reported as soon as it is done. */

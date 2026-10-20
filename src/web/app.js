@@ -35,6 +35,17 @@ function showSkill(skill, button) {
   element('document').hidden = false;
   element('skill-name').textContent = skill.name;
   element('skill-repository').textContent = `${skill.repository} · ${skill.commit.slice(0, 7)}`;
+  const updated = element('skill-updated');
+  updated.textContent = 'Last updated: ';
+  if (skill.lastUpdated) {
+    const time = document.createElement('time');
+    time.dateTime = skill.lastUpdated;
+    time.textContent = new Intl.DateTimeFormat('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      hourCycle: 'h23', timeZone: 'UTC',
+    }).format(new Date(skill.lastUpdated)) + ' UTC';
+    updated.append(time);
+  } else updated.append('Unknown');
   element('skill-description').textContent = skill.description;
   element('skill-path').textContent = skill.path;
   element('skill-copies').textContent = `Also in: ${skill.copies.join(', ')}`;

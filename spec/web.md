@@ -13,6 +13,19 @@ the port. The server binds to loopback. No build step is required.
   name, description, canonical path, copy paths, GitHub link pinned to the scanned
   commit, and complete canonical SKILL.md source including front matter. Read the
   contents during the scan without fetching a second time.
+- In the selected skill's details, show “Last updated” as an absolute UTC date and
+  time, with a machine-readable timestamp. Use the committer date of the latest
+  commit affecting the canonical SKILL.md, looking back from the scanned commit;
+  unrelated repository commits, supporting files, and copies do not set this date.
+  Query history only for readable canonical skills, once per scan; selecting or
+  filtering skills makes no further history requests. Limit history lookups to
+  four concurrent requests per repository. CLI scans do not request history.
+- Include each skill's `lastUpdated` ISO 8601 UTC timestamp (or `null`) in the web
+  API, including organization JSON and streamed results. Keep credentials on the
+  server. If history is empty, malformed, unavailable, or rate limited, preserve
+  the skill and its source, show “Last updated: Unknown”, and report a path-specific
+  warning. Never substitute the repository's scanned commit date. Selection must
+  update the date or unknown state on desktop and narrow screens.
 - Show the source as plain text, with line wrapping and scrolling. Repository
   HTML and scripts must remain inert. Never inject repository text as HTML.
 - Display all scan warnings, including malformed metadata, conflicting copies,
