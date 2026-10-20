@@ -145,3 +145,39 @@ test('organization HTTP scan bounds concurrent repository work and restores orde
   assert.notEqual(completed[0], names[0]);
   assert.deepEqual(result.repositories.map((r) => r.repository.id), names);
 });
+
+
+test('organization HTTP scan preserves healthy repositories when a response body terminates', async (t) => {
+  const { createWebServer } = await import('../src/server.ts');
+  const { replay } = await import('../src/core/replay.ts');
+  const recording = organizationRecording();
+  recording[pageUrl()] = { status: 200, body: [
+    { full_name: `${ORG}/alpha` }, { full_name: `${ORG}/zeta` },
+  ] };
+  const recordedFetch = replay(recording);
+  const server = createWebServer({ github: { fetch: async (input, init) => {
+    if (String(input) === `${API}/repos/${ORG}/alpha`) {
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"full_name":'));
+          controller.error(new TypeError('terminated: private transport details'));
+        },
+      }), { status: 200 });
+    }
+    return recordedFetch(input, init);
+  } } });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const response = await fetch(`http://127.0.0.1:${address.port}/api/scan?organization=${ORG}`);
+  assert.equal(response.status, 200);
+  const result = await response.json() as OrganizationResult;
+  assert.equal(result.repositoryCount, 2);
+  assert.deepEqual(result.repositories.map((r) => r.repository.id), [`${ORG}/zeta`]);
+  assert.deepEqual(result.skills.map((s) => s.id), [`${ORG}/zeta:${PATH}`]);
+  assert.ok(result.skills[0].content);
+  assert.equal(result.warnings.length, 1);
+  assert.match(result.warnings[0], /Example\/alpha: Unable to scan repository.*skipped; results may omit project skills/);
+  assert.equal(JSON.stringify(result).includes('private transport details'), false);
+});

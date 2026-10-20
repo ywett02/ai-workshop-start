@@ -67,7 +67,9 @@ recorded/local sources rather than live GitHub contents.
 - The skill filter applies across all repositories. While filtering, show only
   repository headings that have matching skills; counts cover the organization total.
 - A failed repository is skipped with a repository-specific warning; other
-  repositories still appear. Failure on a later listing page retains earlier
+  repositories still appear, including when a response body fails while being read.
+  Unexpected per-repository errors use a generic warning without internal details.
+  Failure on a later listing page retains earlier
   repositories with an explicit incomplete-listing warning. All discovery and
   skill warnings include their repository. Partial results are explicitly labeled
   as possibly incomplete. A missing organization, rejected token, rate limit, or
