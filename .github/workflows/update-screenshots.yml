@@ -52,6 +52,7 @@ jobs:
           name: screenshots
           path: e2e/__screenshots__/
       - name: Commit changed baselines
+        id: baselines
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
@@ -63,10 +64,27 @@ jobs:
             git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
               commit -m 'test: update e2e screenshot baselines'
             git push origin "HEAD:$BRANCH"
-            # Pushes made with this token start no workflows, so start CI for the new commit.
-            # That needs ci.yml with workflow_dispatch on the default branch.
-            gh workflow run ci.yml --ref "$BRANCH" || echo "::warning::Could not start CI; push to $BRANCH to run it."
+            sha=$(git rev-parse HEAD)
+            echo "commit=$sha" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "$sha" > "$RUNNER_TEMP/baseline-commit.txt"
           fi
+      # This record belongs to this workflow run in GitHub, so a local author or
+      # another workflow cannot impersonate its provenance by choosing a bot name.
+      - uses: actions/upload-artifact@v7
+        if: ${{ steps.baselines.outputs.commit != '' }}
+        with:
+          name: baseline-commit-${{ steps.baselines.outputs.commit }}
+          path: ${{ runner.temp }}/baseline-commit.txt
+          retention-days: 90
+      - name: Start CI for the accepted commit
+        if: ${{ steps.baselines.outputs.commit != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          # Pushes made with this token start no workflows, so start CI for the new commit.
+          # That needs ci.yml with workflow_dispatch on the default branch.
+          gh workflow run ci.yml --ref "$BRANCH" || echo "::warning::Could not start CI; push to $BRANCH to run it."
       - name: Remove the label
         if: ${{ github.event_name == 'pull_request' }}
         env:
