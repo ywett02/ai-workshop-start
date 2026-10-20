@@ -6,6 +6,7 @@ Integration tests for every case in the spec.
 ## Definition of done
 - All tests pass locally
 - The CI build must be green
+- Open a PR when done
 
 ## Commands
 - `npm ci`: first, in a fresh checkout

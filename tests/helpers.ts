@@ -19,6 +19,18 @@ const EXAMPLE: Recording = {
     status: 200,
     body: { total_count: 1, items: [{ path: '.claude/skills/commits/SKILL.md' }] },
   },
+  [`https://api.github.com/repos/JetBrains/example/git/trees/${EXAMPLE_COMMIT}`]: {
+    status: 200, body: { truncated: false, tree: [{ path: '.claude', type: 'tree', mode: '040000', sha: 'claude-tree' }] },
+  },
+  'https://api.github.com/repos/JetBrains/example/git/trees/claude-tree': {
+    status: 200, body: { truncated: false, tree: [{ path: 'skills', type: 'tree', mode: '040000', sha: 'skills-tree' }] },
+  },
+  'https://api.github.com/repos/JetBrains/example/git/trees/skills-tree': {
+    status: 200, body: { truncated: false, tree: [{ path: 'commits', type: 'tree', mode: '040000', sha: 'commits-tree' }] },
+  },
+  'https://api.github.com/repos/JetBrains/example/git/trees/commits-tree': {
+    status: 200, body: { truncated: false, tree: [{ path: 'SKILL.md', type: 'blob', mode: '100644', sha: 'commits-blob' }] },
+  },
   [`https://raw.githubusercontent.com/JetBrains/example/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`]: {
     status: 200,
     body: '---\nname: commits\ndescription: Write commit messages the way this repository does. Use for every commit.\n---\n# Commits\n',

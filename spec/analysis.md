@@ -21,6 +21,8 @@ copy paths. The ID uses the canonical path, not the display name.
 - The display name: nonempty front-matter name, else the skill directory name
 - The description: full front-matter description, else an empty string
 - GitHub files are read at the *scanned commit*, and links pin that commit
+- Authenticated search candidates are checked against commit-pinned Git trees
+  to exclude symbolic links, including linked ancestor directories
 - Local scans inspect the current directory and use file links; commit is empty
 - Missing, unclosed, malformed, or non-mapping front matter → a *warning*, the
   directory name and an empty description; the scan goes on
@@ -70,6 +72,5 @@ The four edge cases have these expected outcomes:
 Integration tests must cover these cases and the boundary rules above, using
 local repositories or recorded GitHub responses rather than live repository
 contents. Acceptance coverage lives in `tests/project-skills.test.ts` and
-`tests/github-scan.test.ts`; the starting implementation does not yet satisfy all
-of these tests. The live performance check in `tests/performance.test.ts` runs
+`tests/github-scan.test.ts`. The live performance check in `tests/performance.test.ts` runs
 only with `SKILL_ATLAS_LIVE_TESTS=1`; offline results do not verify GitHub latency.

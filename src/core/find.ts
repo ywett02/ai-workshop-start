@@ -4,13 +4,18 @@ export type SkillFile = { path: string; name: string; copies: string[] };
 /** Where agents keep a repository's own skills. */
 export const SKILL_ROOTS = ['.agents/skills', '.claude/skills', '.github/skills', 'agent/skills'];
 
-/**
- * Every file named exactly SKILL.md, named after its directory (a SKILL.md at the
- * root after the repository). Each copy is a skill of its own, and nothing is ignored.
- */
-export function findSkills(paths: string[], repositoryName: string): SkillFile[] {
-  return paths
-    .filter((path) => path.split('/').at(-1) === 'SKILL.md')
-    .sort()
-    .map((path) => ({ path, name: path.split('/').at(-2) ?? repositoryName, copies: [] }));
+/** Exact project entry points, grouped by directory name in path order. */
+export function findSkills(paths: string[], _repositoryName: string): SkillFile[] {
+  const groups = new Map<string, SkillFile>();
+  for (const path of [...new Set(paths)].sort()) {
+    const segments = path.split('/');
+    if (segments.length !== 4 || segments[3] !== 'SKILL.md' ||
+        !SKILL_ROOTS.includes(segments.slice(0, 2).join('/'))) continue;
+    const name = segments[2];
+    if (!name || name === '.' || name === '..') continue;
+    const group = groups.get(name);
+    if (group) group.copies.push(path);
+    else groups.set(name, { path, name, copies: [] });
+  }
+  return [...groups.values()];
 }

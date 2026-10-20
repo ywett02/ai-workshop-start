@@ -136,6 +136,47 @@ test('GitHub links encode path segments and pin every read to the resolved commi
   assert.deepEqual(rawRequests, [rawUrl(id, path)]);
 });
 
+test('authenticated search verifies modes at the scanned commit without reading excluded files', async () => {
+  const excluded = 'integration-tests/resources/skills/weather/SKILL.md';
+  const recording = githubRecording(id, { [canonical]: skill(), [excluded]: skill('weather') });
+  const recorded = replay(recording);
+  const requests: string[] = [];
+  const result = await scanGitHub(id, recording, 'test-token', (url, init) => {
+    requests.push(url);
+    return recorded(url, init);
+  });
+  assert.deepEqual(result, {
+    code: 0, stdout: `${id} · 1 skill\ncheck — Check the project.\n  ${pinnedLink(canonical)}`, stderr: '',
+  });
+  assert.ok(requests.includes(`${API}/repos/${id}/git/trees/${EXAMPLE_COMMIT}`));
+  assert.deepEqual(requests.filter((url) => url.startsWith('https://raw.githubusercontent.com/')), [rawUrl(id, canonical)]);
+  assert.ok(requests.every((url) => !url.includes('integration-tests')));
+});
+
+test('authenticated search excludes candidates beneath a symbolic-link ancestor', async () => {
+  const recording = githubRecording(id, { [canonical]: skill(), [good]: skill('good') });
+  const root = recording[`${API}/repos/${id}/git/trees/${EXAMPLE_COMMIT}`].body as GitTree;
+  const agents = root.tree.find((entry) => entry.path === '.agents')!;
+  agents.type = 'blob';
+  agents.mode = '120000';
+  const result = await scanGitHub(id, recording, 'test-token');
+  assert.deepEqual(result, {
+    code: 0, stdout: `${id} · 1 skill\ngood — Check the project.\n  ${pinnedLink(good)}`, stderr: '',
+  });
+});
+
+test('a failed authenticated mode check warns and preserves another readable copy', async () => {
+  const recording = githubRecording(id, { [canonical]: skill(), [copy]: skill() });
+  const root = recording[`${API}/repos/${id}/git/trees/${EXAMPLE_COMMIT}`].body as GitTree;
+  const agents = root.tree.find((entry) => entry.path === '.agents')!;
+  recording[`${API}/repos/${id}/git/trees/${agents.sha}`] = { status: 500, body: { message: 'Unavailable' } };
+  const result = await scanGitHub(id, recording, 'test-token');
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stdout, `${id} · 1 skill\ncheck — Check the project.\n  ${pinnedLink(copy)}`);
+  assert.match(result.stderr, /^warning: /);
+  assert.ok(result.stderr.includes(canonical), result.stderr);
+});
+
 test('truncated root listing falls back to project roots and explicitly warns about limited discovery', async () => {
   const recording = githubRecording(id, { [canonical]: skill(), [good]: skill('good') });
   recording[`${API}/repos/${id}/git/trees/${EXAMPLE_COMMIT}?recursive=1`] = {
