@@ -9,7 +9,12 @@ export type GitHubOptions = {
   fetch: Fetch;
   /** With a token, skills are found through code search; without it, through the tree. */
   token?: string;
+  /** Overrides the token's choice. Code search allows ten requests a minute, too few for an organization. */
+  search?: boolean;
 };
+
+/** What a repository listing already says about a repository, so it is not asked for again. */
+export type KnownRepository = { full_name: string; default_branch?: string };
 
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
@@ -34,14 +39,14 @@ export async function listGitHubOrganization(input: string, options: GitHubOptio
   const { login } = await github.json<{ login: string }>(
     `${API}/orgs/${name}`, `Organization not found: https://github.com/${name}`,
   );
-  const repositories = new Set<string>();
+  const repositories = new Map<string, KnownRepository>();
   const warnings: string[] = [];
   for (let page = 1; ; page++) {
     try {
-      const items = await github.json<{ full_name: string }[]>(
+      const items = await github.json<KnownRepository[]>(
         `${API}/orgs/${login}/repos?type=all&per_page=100&page=${page}`,
       );
-      for (const item of items) repositories.add(item.full_name);
+      for (const item of items) if (!repositories.has(item.full_name)) repositories.set(item.full_name, item);
       if (items.length < 100) break;
     } catch (error) {
       if (page === 1) throw error;
@@ -49,22 +54,22 @@ export async function listGitHubOrganization(input: string, options: GitHubOptio
       break;
     }
   }
-  return { organization: login, repositories: [...repositories].sort(), warnings };
+  const ids = [...repositories.keys()].sort();
+  return { organization: login, repositories: ids, known: ids.map((id) => repositories.get(id)!), warnings };
 }
 
 /** Resolves the default branch to a commit and lists the files that may be skills. */
-export async function openGitHub(input: string, options: GitHubOptions): Promise<Source> {
+export async function openGitHub(input: string, options: GitHubOptions, known?: KnownRepository): Promise<Source> {
   const name = parseGitHubUrl(input);
   if (!name) throw new AtlasError(`Not a GitHub repository URL: ${input}`);
   const github = client(options);
-  const info = await github.json<{ full_name: string; default_branch: string }>(
-    `${API}/repos/${name.owner}/${name.repo}`,
-    `Repository not found: https://github.com/${name.owner}/${name.repo}`,
-  );
+  const notFound = `Repository not found: https://github.com/${name.owner}/${name.repo}`;
+  const info = known?.default_branch ? known as Required<KnownRepository>
+    : await github.json<Required<KnownRepository>>(`${API}/repos/${name.owner}/${name.repo}`, notFound);
   const id = info.full_name;
-  const { sha } = await github.json<{ sha: string }>(`${API}/repos/${id}/commits/${encodePath(info.default_branch)}`);
+  const { sha } = await github.json<{ sha: string }>(`${API}/repos/${id}/commits/${encodePath(info.default_branch)}`, notFound);
   const warnings: string[] = [];
-  const paths = options.token ? await searchPaths(github, id, sha, warnings) : await treePaths(github, id, sha, warnings);
+  const paths = (options.search ?? Boolean(options.token)) ? await searchPaths(github, id, sha, warnings) : await treePaths(github, id, sha, warnings);
   const [organization, repo] = id.split('/');
   return {
     repository: { id, organization, name: repo, url: `https://github.com/${id}`, commit: sha },
