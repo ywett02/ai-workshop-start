@@ -7,7 +7,25 @@ description: Use when asked to address, fix, or respond to review comments or un
 
 Update the existing open pull requests with fixes for their unresolved review threads. Push the fixes to each PR's own branch, reply in each thread, and resolve the threads you addressed. Never open a new PR or a separate fix branch.
 
-Other agents may run this skill at the same time. A 👀 (`EYES`) reaction on a thread's last comment means an agent has claimed it; never work on a claimed thread.
+A 👀 (`EYES`) reaction on a thread's last comment marks a claim; never work on a claimed thread. Reactions are status markers, not locks: GitHub deduplicates identical reactions from the same account, so a count of one cannot prove exclusive ownership.
+
+## 0. Require enforced serialization
+
+Before claiming threads or making any repository or GitHub changes, verify that the launcher holds an exclusive lock for this repository for the entire run, including pushes, replies, resolution, and cleanup. Every launcher that runs this skill against the repository must use the same lock, regardless of GitHub account. The lock must distinguish individual runs and prevent a second run from entering until the first finishes; checking reactions, posting a run ID, or waiting and re-querying is not sufficient.
+
+For example, if GitHub Actions is the sole launcher, configure **every** workflow that invokes this skill with the same repository-wide concurrency group (do not include the workflow name, branch, PR, or run ID):
+
+```yaml
+concurrency:
+  group: address-review-${{ github.repository }}
+  cancel-in-progress: false
+```
+
+This serializes running jobs in that group; it does not guarantee that every pending run will execute. It also does not lock out Air Automations or other launchers. With multiple launchers, require a shared exclusive lock service instead, held until this run exits. A machine-local lock is insufficient across cloud environments.
+
+Verify the launcher configuration and evidence that this run holds the lock. If that evidence is unavailable, or any competing launcher bypasses the lock, stop without claiming, editing, pushing, replying, resolving, or removing reactions. Report that enforced repository-wide serialization must be configured. Do not assume that using the same automation, account, or schedule serializes runs.
+
+Only after this prerequisite is satisfied, continue below. Keep the lock until all work and claim cleanup are complete; release it through the launcher's guaranteed exit cleanup, including on failures.
 
 ## 1. Find PRs with unresolved threads
 
@@ -42,12 +60,12 @@ For each PR:
 
 1. Check out its branch: `gh pr checkout <number>`, then `npm ci`. Run `git pull` so you start from the PR's latest commit.
 2. Also read top-level review bodies and PR comments (`gh pr view <number> --comments`); they cannot be resolved, but may ask for changes.
-3. Claim each thread open for work before touching it (see [Claim](#claim)). Then re-query the threads: if another 👀 or a new comment appeared on a thread meanwhile, leave that thread to the other agent and remove your reaction.
+3. Claim each thread open for work before touching it (see [Claim](#claim)). Then re-query the threads: if another 👀 or a new comment appeared on a thread meanwhile, leave that thread alone and remove only a reaction you know this run created. This is a stale-state check, not the concurrency guarantee; the launcher lock provides exclusivity even when runs share a GitHub account.
 4. For each claimed thread, read the whole thread, the code it points to, and the relevant files in `spec/`. An outdated thread may already be fixed; check the current code before changing anything.
 
 ## Claim
 
-React 👀 on the thread's last comment (`<comment-id>` is that comment's `id`):
+With the launcher lock held, recheck that the last comment has no 👀 reaction, then react 👀 on the thread's last comment (`<comment-id>` is that comment's `id`):
 
 ```sh
 gh api graphql -F id=<comment-id> -f query='
@@ -100,6 +118,7 @@ Answer top-level review or PR comments that asked for changes with one PR commen
 
 ## Done when
 
+- Enforced repository-wide serialization was verified before mutations and held throughout the run.
 - Every fix is pushed to the existing PR it belongs to.
 - Each thread you claimed has a reply; each addressed thread is resolved, and each thread left open has 👀 on your reply. Threads claimed by other agents were not touched.
 - `npm test` and `npm run typecheck` pass locally on each changed branch, and CI is green.
