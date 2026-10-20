@@ -175,7 +175,8 @@ async function showOrganization(response) {
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffered = '';
   for (;;) {
-    const { value, done } = await reader.read();
+    // A broken connection rejects instead of ending; both leave the scan unfinished.
+    const { value, done } = await reader.read().catch(() => ({ done: true }));
     if (done) break;
     const lines = (buffered + value).split('\n');
     buffered = lines.pop();

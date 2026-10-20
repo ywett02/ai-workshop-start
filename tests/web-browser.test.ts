@@ -338,3 +338,36 @@ test('organization view: skills appear while other repositories are still being 
   await expect(page.locator('#status')).toContainText('Results may be incomplete');
   await expect(input).toBeEnabled();
 });
+
+for (const ending of ['a broken connection', 'an early end']) test(`organization view: ${ending} keeps results and says they may be incomplete`, async (t) => {
+  const { createServer } = await import('node:http');
+  const { listen } = await import('./web-helpers.ts');
+  const { createWebServer } = await import('../src/server.ts');
+  const web = createWebServer();
+  const skill = { id: 'Example/a:.agents/skills/a/SKILL.md', name: 'Alpha', description: 'First', path: '.agents/skills/a/SKILL.md', copies: [], repository: 'Example/a', commit: COMMIT, link: 'https://github.com/Example/a', content: 'Source' };
+  const lines = [
+    { type: 'start', organization: 'Example', repositoryCount: 2, warnings: [] },
+    { type: 'repository', id: 'Example/a', result: { repository: { id: 'Example/a', commit: COMMIT }, skills: [skill], warnings: [] }, warnings: [] },
+  ];
+  // Only the scan is replaced; the page and its assets come from the real server.
+  const app = await listen(createServer((request, response) => {
+    if (!request.url?.startsWith('/api/scan')) return void web.emit('request', request, response);
+    response.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8' });
+    response.write(lines.map((line) => `${JSON.stringify(line)}\n`).join(''));
+    if (ending === 'an early end') response.end();
+    else setTimeout(() => response.destroy(), 100);
+  }));
+  t.after(app.close);
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(app.url);
+  await page.getByLabel('Scan scope').selectOption('organization');
+  const input = page.getByLabel('GitHub organization', { exact: true });
+  await input.fill('Example');
+  await input.press('Enter');
+  await expect(page.locator('#status')).toHaveText('The organization scan stopped early; results may be incomplete. Please try again.');
+  await expect(page.getByRole('navigation', { name: 'Skills' }).getByRole('button')).toHaveText([/Alpha/]);
+  await expect(page.locator('#repository-info')).toContainText('1 of 2 repositories scanned');
+  await expect(input).toBeEnabled();
+});
