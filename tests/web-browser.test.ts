@@ -297,3 +297,44 @@ test('web view: Unicode lowercase expansion preserves highlights and description
   await expect(list.locator('strong')).toHaveText('İstanbul skill');
   await expect(list.locator('span')).toHaveText(`${'İ'.repeat(50)} Needle`);
 });
+
+test('organization view: skills appear while other repositories are still being scanned', async (t) => {
+  const { organizationRecording, ORG } = await import('./organization-helpers.ts');
+  const { listen } = await import('./web-helpers.ts');
+  const { createWebServer } = await import('../src/server.ts');
+  const { replay } = await import('../src/core/replay.ts');
+  const recorded = replay(organizationRecording());
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  t.after(() => release());
+  const app = await listen(createWebServer({ github: { fetch: async (url, init) => {
+    if (url === `https://api.github.com/repos/${ORG}/zeta/commits/main`) await gate;
+    return recorded(url, init);
+  } } }));
+  t.after(app.close);
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(app.url);
+  await page.getByLabel('Scan scope').selectOption('organization');
+  const input = page.getByLabel('GitHub organization', { exact: true });
+  await input.fill(ORG);
+  await input.press('Enter');
+  const list = page.getByRole('navigation', { name: 'Skills' });
+  await expect(list.getByRole('button')).toHaveCount(1);
+  await expect(page.locator('#status')).toContainText('3 of 4 repositories checked, 1 project skill so far');
+  await expect(page.locator('#repository-info')).toContainText('2 of 4 repositories scanned');
+  await expect(page.locator('#warnings')).toContainText('Example/broken');
+  await expect(input).toBeDisabled();
+  await list.getByRole('button').focus();
+  await expect(page.locator('#skill-repository')).toContainText('Example/alpha');
+
+  release();
+  await expect(list.getByRole('button')).toHaveCount(2);
+  await expect(list.getByRole('heading')).toHaveText([/Example\/alpha/, /Example\/empty/, /Example\/zeta/]);
+  await expect(list.getByRole('button').first()).toBeFocused();
+  await expect(page.locator('#skill-repository')).toContainText('Example/alpha');
+  await expect(page.locator('#status')).toContainText('2 project skills in Example');
+  await expect(page.locator('#status')).toContainText('Results may be incomplete');
+  await expect(input).toBeEnabled();
+});

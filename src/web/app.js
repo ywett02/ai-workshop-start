@@ -10,6 +10,8 @@ const filter = element('filter-query');
 let skills = [];
 let selectedSkill = null;
 let repositories = null;
+let scanning = false;
+const buttonSkills = new WeakMap();
 
 function clearResults() {
   skills = [];
@@ -100,6 +102,7 @@ function addSkill(skill, query, selection) {
   if (match !== -1) description.className = 'matching-description';
   button.append(name, description);
   button.addEventListener('click', () => showSkill(skill, button));
+  buttonSkills.set(button, skill);
   list.append(button);
   if (skill === selection) showSkill(skill, button);
 }
@@ -110,6 +113,8 @@ function renderSkills() {
     skill.name.toLowerCase().includes(query) || skill.description.toLowerCase().includes(query);
   const matches = skills.filter(matching);
   const selection = matches.includes(selectedSkill) ? selectedSkill : matches[0];
+  // Repositories arrive while an organization is scanned; keep keyboard focus on its skill.
+  const focused = buttonSkills.get(document.activeElement);
   list.replaceChildren();
   element('skill-count').textContent = query ? `${matches.length} of ${skills.length}` : String(skills.length);
   element('filter-status').textContent = query
@@ -135,9 +140,58 @@ function renderSkills() {
     element('document-empty').hidden = false;
     const empty = document.createElement('p');
     empty.className = 'list-empty';
-    empty.textContent = query ? 'No skills match your filter.' : 'No skills in the supported project folders.';
+    empty.textContent = query ? 'No skills match your filter.'
+      : scanning ? 'Skills appear here as repositories are scanned.' : 'No skills in the supported project folders.';
     list.append(empty);
   }
+  if (focused) [...list.querySelectorAll('button')].find((button) => buttonSkills.get(button) === focused)?.focus();
+}
+
+function showWarnings(warnings) {
+  element('warnings').textContent = `Scan warnings\n${warnings.join('\n')}`;
+  element('warnings').hidden = warnings.length === 0;
+}
+
+// The server sends one JSON line per event: start, each repository as it finishes, done.
+async function showOrganization(response) {
+  let start = null;
+  let finished = false;
+  const scans = [];
+  const update = () => {
+    repositories = scans.flatMap((scan) => scan.result ?? []);
+    // Group entries and the flattened list share order; reuse group objects so selection matches.
+    skills = repositories.flatMap((entry) => entry.skills);
+    const warnings = [...start.warnings, ...scans.flatMap((scan) => scan.warnings)];
+    element('repository-info').textContent = `${start.organization} · ${repositories.length} of ${start.repositoryCount} repositories scanned`;
+    element('skill-filter').hidden = skills.length === 0;
+    showWarnings(warnings);
+    const found = `${skills.length} project ${skills.length === 1 ? 'skill' : 'skills'}`;
+    element('status').textContent = !finished
+      ? `Exploring ${start.organization}: ${scans.length} of ${start.repositoryCount} repositories checked, ${found} so far…`
+      : skills.length ? `${found} in ${start.organization}` : 'No project skills found in this organization.';
+    if (finished && warnings.length) element('status').textContent += ' Results may be incomplete; see scan warnings.';
+    renderSkills();
+  };
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffered = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    const lines = (buffered + value).split('\n');
+    buffered = lines.pop();
+    for (const line of lines.filter(Boolean)) {
+      const event = JSON.parse(line);
+      if (event.type === 'start') start = event;
+      else if (event.type === 'done') finished = true;
+      else if (event.type === 'repository') {
+        // Case-sensitive ID order, as in a finished scan.
+        const index = scans.findIndex((scan) => scan.id > event.id);
+        scans.splice(index === -1 ? scans.length : index, 0, event);
+      }
+    }
+    if (start) update();
+  }
+  if (!finished) throw new Error('The organization scan stopped early; results may be incomplete. Please try again.');
 }
 
 filter.addEventListener('input', renderSkills);
@@ -167,30 +221,30 @@ form.addEventListener('submit', async (event) => {
   submit.textContent = 'Exploring…';
   workspace.setAttribute('aria-busy', 'true');
   element('status').textContent = `Exploring ${scope.value} and reading skill files…`;
+  const organization = scope.value === 'organization';
+  scanning = true;
   try {
-    const response = await fetch(`/api/scan?${scope.value}=${encodeURIComponent(input.value.trim())}`);
+    const response = await fetch(`/api/scan?${scope.value}=${encodeURIComponent(input.value.trim())}`,
+      organization ? { headers: { Accept: 'application/x-ndjson' } } : undefined);
+    if (!response.ok) throw new Error((await response.json()).error || `Unable to scan this ${scope.value}.`);
+    if (organization) {
+      await showOrganization(response);
+      return;
+    }
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || `Unable to scan this ${scope.value}.`);
-    const organization = scope.value === 'organization';
-    element('repository-info').textContent = organization
-      ? `${result.organization} · ${result.repositories.length} of ${result.repositoryCount} repositories scanned`
-      : `${result.repository.id} · ${result.repository.commit.slice(0, 7)}`;
-    repositories = organization ? result.repositories : null;
-    // Group entries and the flattened list share order; reuse group objects so selection matches.
-    skills = organization ? repositories.flatMap((entry) => entry.skills) : result.skills;
+    element('repository-info').textContent = `${result.repository.id} · ${result.repository.commit.slice(0, 7)}`;
+    skills = result.skills;
     element('skill-filter').hidden = skills.length === 0;
     element('status').textContent = result.skills.length
-      ? `${result.skills.length} project ${result.skills.length === 1 ? 'skill' : 'skills'} in ${organization ? result.organization : result.repository.id}`
+      ? `${result.skills.length} project ${result.skills.length === 1 ? 'skill' : 'skills'} in ${result.repository.id}`
       : `No project skills found in this ${scope.value}.`;
-    if (result.warnings.length) {
-      element('warnings').textContent = `Scan warnings\n${result.warnings.join('\n')}`;
-      element('warnings').hidden = false;
-      if (organization) element('status').textContent += ' Results may be incomplete; see scan warnings.';
-    }
+    if (result.warnings.length) showWarnings(result.warnings);
     renderSkills();
   } catch (error) {
     element('status').textContent = error instanceof Error ? error.message : 'Unable to reach the local server. Please try again.';
   } finally {
+    scanning = false;
+    if (repositories) renderSkills();
     submit.disabled = false;
     input.disabled = false;
     scope.disabled = false;

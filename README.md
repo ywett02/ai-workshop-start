@@ -25,7 +25,8 @@ select a skill to read its
 complete SKILL.md. The view shows descriptions, copy paths, scan warnings, and
 links pinned to the scanned commit. Organization mode also accepts a bare login
 (such as `JetBrains`) and scans every accessible repository, including forks and
-archived repositories. Results are grouped by repository; failures and incomplete
+archived repositories. Skills appear as each repository is scanned, so you can
+start reading before the whole organization is done. Results are grouped by repository; failures and incomplete
 listings appear as warnings while available results remain usable. Without a
 token only public repositories are visible. Use **Filter skills** to instantly
 search names and descriptions, see highlighted matches and a matching count, or
