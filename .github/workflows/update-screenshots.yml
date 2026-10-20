@@ -1,0 +1,74 @@
+# Accepts new e2e screenshot baselines: renders them in the CI image and commits them to the
+# branch. Add the update-screenshots label to a pull request, or run it on a branch by hand.
+name: Update screenshots
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: update-screenshots-${{ github.head_ref || github.ref_name }}
+jobs:
+  render:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.label.name == 'update-screenshots' }}
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.58.2-noble
+    timeout-minutes: 10
+    steps:
+      - name: Refuse the default branch
+        if: ${{ github.event_name == 'workflow_dispatch' && github.ref_name == github.event.repository.default_branch }}
+        run: |
+          echo "Update baselines on a branch and review them in its pull request." >&2
+          exit 1
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run e2e -- --update-snapshots=all
+      - uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: e2e/__screenshots__/
+  commit:
+    needs: render
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - run: rm -rf e2e/__screenshots__
+      - uses: actions/download-artifact@v8
+        with:
+          name: screenshots
+          path: e2e/__screenshots__/
+      - name: Commit changed baselines
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          git add --all e2e/__screenshots__
+          if git diff --cached --quiet; then
+            echo "Screenshots are unchanged."
+          else
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m 'test: update e2e screenshot baselines'
+            git push origin "HEAD:$BRANCH"
+            # Pushes made with this token start no workflows, so start CI for the new commit.
+            # That needs ci.yml with workflow_dispatch on the default branch.
+            gh workflow run ci.yml --ref "$BRANCH" || echo "::warning::Could not start CI; push to $BRANCH to run it."
+          fi
+      - name: Remove the label
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr edit ${{ github.event.pull_request.number }} --remove-label update-screenshots

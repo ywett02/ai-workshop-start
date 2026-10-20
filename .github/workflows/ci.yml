@@ -4,6 +4,8 @@ name: CI
 on:
   push:
   pull_request:
+  # Started by the screenshot update workflow: its commits do not trigger push events.
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -28,3 +30,26 @@ jobs:
         run: |
           ./skill-atlas help
           ./skill-atlas scan ./fixture
+
+  # The demos as tests. Screenshots are compared with baselines rendered in this same image;
+  # change them by adding the update-screenshots label to the pull request.
+  e2e:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.58.2-noble
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run e2e
+      # Videos of every run, and on failure the expected, actual and diff screenshots.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: e2e-results
+          path: |
+            test-results/
+            playwright-report/
