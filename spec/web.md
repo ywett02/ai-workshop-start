@@ -22,7 +22,10 @@ the port. The server binds to loopback. No build step is required.
   four concurrent requests per repository. CLI scans do not request history.
 - Include each skill's `lastUpdated` ISO 8601 UTC timestamp (or `null`) in the web
   API, including organization JSON and streamed results. Keep credentials on the
-  server. If history is empty, malformed, unavailable, or rate limited, preserve
+  server. Accept only timestamps with valid calendar and clock components (including
+  Gregorian leap-year rules); reject overflow dates such as February 30 and 24:00
+  before converting valid timezone offsets to UTC. If history is empty, malformed,
+  unavailable, or rate limited, preserve
   the skill and its source, show “Last updated: Unknown”, and report a path-specific
   warning. Never substitute the repository's scanned commit date. Selection must
   update the date or unknown state on desktop and narrow screens.

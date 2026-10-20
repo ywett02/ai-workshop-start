@@ -74,6 +74,16 @@ const failures: Record<string, Recorded> = {
   malformed: { status: 200, body: { unexpected: true } },
   missing: { status: 200, body: [{ commit: { committer: null } }] },
   invalid: { status: 200, body: [{ commit: { committer: { date: '<script>unsafe</script>' } } }] },
+  'calendar-invalid': { status: 200, body: [{ commit: { committer: { date: '2025-02-30T14:30:00Z' } } }] },
+  'non-leap-day': { status: 200, body: [{ commit: { committer: { date: '2025-02-29T14:30:00Z' } } }] },
+  'century-non-leap-day': { status: 200, body: [{ commit: { committer: { date: '1900-02-29T14:30:00Z' } } }] },
+  'april-overflow': { status: 200, body: [{ commit: { committer: { date: '2025-04-31T14:30:00Z' } } }] },
+  'zero-day': { status: 200, body: [{ commit: { committer: { date: '2025-03-00T14:30:00Z' } } }] },
+  'zero-month': { status: 200, body: [{ commit: { committer: { date: '2025-00-12T14:30:00Z' } } }] },
+  'month-overflow': { status: 200, body: [{ commit: { committer: { date: '2025-13-12T14:30:00Z' } } }] },
+  'midnight-overflow': { status: 200, body: [{ commit: { committer: { date: '2025-03-12T24:00:00Z' } } }] },
+  'offset-hour-overflow': { status: 200, body: [{ commit: { committer: { date: '2025-03-12T14:30:00+24:00' } } }] },
+  'offset-minute-overflow': { status: 200, body: [{ commit: { committer: { date: '2025-03-12T14:30:00+01:60' } } }] },
   forbidden: { status: 403, body: { message: 'API rate limit exceeded' } },
   unavailable: { status: 503, body: {} },
 };
@@ -89,6 +99,43 @@ for (const [name, answer] of Object.entries(failures)) {
     assert.equal(result.skills[0].lastUpdated, null);
     assert.equal(result.skills[0].content, skill('Check', 'Verify commands.'));
     assert.ok(result.warnings.some((warning: string) => warning.includes(`${PATH}: last updated date unavailable`)));
+  });
+}
+
+for (const [date, expected] of [
+  ['2024-02-29T23:30:00-02:00', '2024-03-01T01:30:00.000Z'],
+  ['2000-02-29T00:30:00+02:00', '2000-02-28T22:30:00.000Z'],
+  ['2025-04-30T14:30:00.123Z', '2025-04-30T14:30:00.123Z'],
+  ['0000-02-29T00:00:00Z', '0000-02-29T00:00:00.000Z'],
+]) {
+  test(`history accepts valid calendar timestamp ${date}`, async (t) => {
+    const answers = recording();
+    answers[historyUrl(PATH)] = { status: 200, body: [{ commit: { committer: { date } } }] };
+    const app = await fixture(answers);
+    t.after(app.close);
+    const result = await (await fetch(`${app.url}/api/scan?repository=github.com/${ID}`)).json() as WebResult;
+    assert.equal(result.skills[0].lastUpdated, expected);
+    assert.equal(result.warnings.some((warning) => warning.startsWith(`${PATH}:`)), false);
+  });
+}
+
+for (const accept of ['application/json', 'application/x-ndjson']) {
+  test(`organization rejects impossible calendar history with ${accept}`, async (t) => {
+    const answers = recording();
+    answers[historyUrl(PATH)] = failures['calendar-invalid'];
+    answers['https://api.github.com/orgs/Test'] = { status: 200, body: { login: 'Test' } };
+    answers['https://api.github.com/orgs/Test/repos?type=all&per_page=100&page=1'] = {
+      status: 200, body: [{ full_name: ID, default_branch: 'main' }],
+    };
+    const app = await fixture(answers);
+    t.after(app.close);
+    const response = await fetch(`${app.url}/api/scan?organization=Test`, { headers: { Accept: accept } });
+    assert.equal(response.status, 200);
+    const text = await response.text();
+    const result = accept === 'application/json' ? JSON.parse(text)
+      : JSON.parse(text.trim().split('\n')[1]);
+    assert.equal((result.result ?? result).skills[0].lastUpdated, null);
+    assert.ok(result.warnings.some((warning: string) => warning.includes(`${ID}: ${PATH}: last updated date unavailable`)));
   });
 }
 

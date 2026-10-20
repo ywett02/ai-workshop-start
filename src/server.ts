@@ -12,6 +12,22 @@ const assets = new Map([
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
 ]);
 
+/** Validate the written calendar date before Date.parse can normalize overflow days. */
+function historyDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+  if (!parts) return null;
+  const [, year, month, day, hour, minute, second, , offsetHour, offsetMinute] = parts;
+  const y = Number(year);
+  const m = Number(month);
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (m < 1 || m > 12 || Number(day) < 1 || Number(day) > days[m - 1]
+    || Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59
+    || (offsetHour !== undefined && (Number(offsetHour) > 23 || Number(offsetMinute) > 59))) return null;
+  return Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null;
+}
+
 /** Local, read-only web client; tokens and repository fetching stay on the server. */
 export function createWebServer(options: Options = {}) {
   const github = options.github ?? { fetch, token: process.env.GITHUB_TOKEN || undefined };
@@ -36,9 +52,7 @@ export function createWebServer(options: Options = {}) {
         let lastUpdated: string | null = null;
         try {
           const date = await source.lastUpdated?.(skill.path);
-          if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(date) && Number.isFinite(Date.parse(date))) {
-            lastUpdated = new Date(date).toISOString();
-          }
+          lastUpdated = historyDate(date);
         } catch {
           // Do not expose unexpected errors or credentials in warnings.
         }
