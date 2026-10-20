@@ -22,7 +22,10 @@ Skill Atlas: http://127.0.0.1:3000
 
 Open that address, enter a GitHub repository link, and select a skill to read its
 complete SKILL.md. The view shows descriptions, copy paths, scan warnings, and
-links pinned to the scanned commit. `PORT` changes the listening port.
+links pinned to the scanned commit. Use **Filter skills** to instantly search names
+and descriptions, see highlighted matches and a matching count, or **Clear filter**
+to restore the full list. Filtering uses the loaded results without another scan.
+`PORT` changes the listening port.
 
 Set `GITHUB_TOKEN` for a higher GitHub rate limit; the web server keeps it out of
 the browser. `npm test` runs the tests. For browser tests, install Chromium once
