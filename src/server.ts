@@ -43,8 +43,8 @@ export function createWebServer(options: Options = {}) {
         try {
           results.set(id, await scanRepository(`https://github.com/${id}`));
         } catch (error) {
-          if (!(error instanceof AtlasError)) throw error;
-          failures.set(id, `${id}: ${error.message}; skipped; results may omit project skills`);
+          const message = error instanceof AtlasError ? error.message : 'Unable to scan repository. Please try again.';
+          failures.set(id, `${id}: ${message}; skipped; results may omit project skills`);
         }
       }
     }));
