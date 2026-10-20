@@ -23,6 +23,7 @@ Start from an up-to-date `main`: `git fetch && git switch -c <type>/<number>-<sh
 2. Add an integration test for every new or changed spec case, following the existing files in `tests/`. Run `npm test` and confirm the new tests fail for the right reason.
 3. Implement the smallest change that makes them pass, matching the surrounding code style.
 4. Run `npm test` and `npm run typecheck`; both must pass. Update `README.md` if user-facing usage changed.
+5. Never update `e2e/__screenshots__/` yourself (no `--update-snapshots`). If your change alters the UI, CI's `e2e` job fails and shows the diff; that failure is expected. Say in the PR that the screenshots change and why, and leave accepting them to the reviewer, who adds the `update-screenshots` label.
 
 Keep the change scoped to the issue. Note unrelated problems in the PR description instead of fixing them.
 
@@ -40,6 +41,6 @@ Keep the change scoped to the issue. Note unrelated problems in the PR descripti
 
 - Every acceptance criterion is in `spec/` and covered by an integration test.
 - `npm test` and `npm run typecheck` pass locally.
-- CI is green on the PR.
+- CI is green on the PR, except an `e2e` screenshot diff your UI change causes; it waits for the reviewer's `update-screenshots` label.
 - For a UI change, the PR shows it in a screenshot or video.
 - You reply with the PR link, a one-line summary, and anything left open (assumptions, follow-ups, unverified behavior).

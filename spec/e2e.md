@@ -21,3 +21,6 @@
   Update screenshots workflow on a branch. It renders the screenshots in the CI image, commits
   any changes to the branch, starts CI for that commit, and removes the label. It refuses the
   default branch.
+- Baselines change only that way, never by hand or by running `--update-snapshots` locally, so
+  every change is first seen failing on CI. For pull requests, CI fails when any screenshot
+  differing from the base branch was last committed by someone other than `github-actions[bot]`.
