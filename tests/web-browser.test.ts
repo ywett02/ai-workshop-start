@@ -202,6 +202,71 @@ test('web view: scan, select, warnings, safe source, empty result, retry and mob
   assert.equal(app.reads.length, 10, 'selection never refetches files');
 });
 
+test('organization view: loading, repository groups, safe selection, partial and empty states, retry and mode switching', async (t) => {
+  const { organizationFixture, organizationRecording, ORG } = await import('./organization-helpers.ts');
+  const recording = organizationRecording();
+  recording['https://api.github.com/orgs/Empty'] = { status: 200, body: { login: 'Empty' } };
+  recording['https://api.github.com/orgs/Empty/repos?type=all&per_page=100&page=1'] = { status: 200, body: [] };
+  recording['https://api.github.com/orgs/Missing'] = { status: 404, body: { message: 'Not Found' } };
+  const app = await organizationFixture(recording);
+  t.after(app.close);
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
+  t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.goto(app.url);
+  const mode = page.getByLabel('Scan scope');
+  await mode.selectOption('organization');
+  const input = page.getByLabel('GitHub organization', { exact: true });
+  await input.fill(ORG);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/api/scan?**', async (route) => { await gate; await route.continue(); }, { times: 1 });
+  await input.press('Enter');
+  await expect(mode).toBeDisabled();
+  await expect(input).toBeDisabled();
+  await expect(page.locator('#status')).toContainText('Exploring organization');
+  release();
+  const list = page.getByRole('navigation', { name: 'Skills' });
+  await expect(list.getByRole('button')).toHaveCount(2);
+  await expect(list.getByRole('heading')).toHaveText([
+    /Example\/alpha.*1 skill/, /Example\/empty.*0 skills/, /Example\/zeta.*1 skill/,
+  ]);
+  await expect(page.locator('#repository-info')).toContainText('3 of 4 repositories scanned');
+  await expect(page.locator('#status')).toContainText('Results may be incomplete');
+  await expect(page.locator('#warnings')).toContainText('Example/broken');
+  await expect(page.locator('#skill-repository')).toContainText('Example/alpha');
+  assert.equal(await page.evaluate('window.pwned'), undefined);
+  await list.getByRole('button').last().focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#skill-repository')).toContainText('Example/zeta');
+  await expect(page.locator('#skill-content')).toContainText('Second repository.');
+  await expect(page.locator('#source-link')).toHaveAttribute('href', /Example\/zeta\/blob\//);
+  const filter = page.getByRole('searchbox', { name: 'Filter skills' });
+  await filter.fill('second');
+  await expect(list.getByRole('heading')).toHaveText([/Example\/zeta/]);
+  await expect(list.locator('span mark')).toHaveText('Second');
+  await expect(page.locator('#skill-count')).toHaveText('1 of 2');
+  await expect(page.locator('#skill-repository')).toContainText('Example/zeta');
+  await page.getByRole('button', { name: 'Clear filter' }).click();
+  await expect(list.getByRole('heading')).toHaveCount(3);
+  assert.equal(app.calls.filter((c) => c.url.includes('raw.githubusercontent.com')).length, 2);
+  assert.equal(await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
+  await input.fill('Empty');
+  await input.press('Enter');
+  await expect(page.locator('#status')).toContainText('No project skills found in this organization');
+  await expect(list.getByRole('button')).toHaveCount(0);
+  await expect(page.locator('#document')).toBeHidden();
+  await expect(page.locator('#warnings')).toBeHidden();
+  await input.fill('Missing');
+  await input.press('Enter');
+  await expect(page.locator('#status')).toContainText('Organization not found');
+  await expect(mode).toBeEnabled();
+  await mode.selectOption('repository');
+  await page.getByLabel('GitHub repository', { exact: true }).fill('github.com/Example/alpha');
+  await page.getByRole('button', { name: /Explore repository/ }).click();
+  await expect(list.getByRole('button')).toHaveCount(1);
+  await expect(page.locator('#repository-info')).toContainText('Example/alpha');
+});
 
 test('web view: Unicode lowercase expansion preserves highlights and description excerpts', async (t) => {
   const app = await webFixture({

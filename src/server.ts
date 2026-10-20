@@ -1,11 +1,11 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { openGitHub, parseGitHubUrl } from './core/github.ts';
+import { listGitHubOrganization, openGitHub, parseGitHubOrganization, parseGitHubUrl, type GitHubOptions } from './core/github.ts';
 import { AtlasError } from './core/errors.ts';
 import { skillLink } from './core/model.ts';
 import { scan, type Source } from './core/scan.ts';
 
-type Options = { open?: (input: string) => Promise<Source> };
+type Options = { open?: (input: string) => Promise<Source>; github?: GitHubOptions };
 const assets = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
@@ -14,7 +14,50 @@ const assets = new Map([
 
 /** Local, read-only web client; tokens and repository fetching stay on the server. */
 export function createWebServer(options: Options = {}) {
-  const open = options.open ?? ((input: string) => openGitHub(input, { fetch, token: process.env.GITHUB_TOKEN || undefined }));
+  const github = options.github ?? { fetch, token: process.env.GITHUB_TOKEN || undefined };
+  const open = options.open ?? ((input: string) => openGitHub(input, github));
+  async function scanRepository(input: string) {
+    const source = await open(input);
+    const contents = new Map<string, string>();
+    const result = await scan({
+      ...source,
+      read: async (path) => {
+        const bytes = await source.read(path);
+        if (bytes) contents.set(path, new TextDecoder().decode(bytes));
+        return bytes;
+      },
+    });
+    return {
+      ...result,
+      skills: result.skills.map((skill) => ({ ...skill, link: skillLink(result.repository, skill), content: contents.get(skill.path) })),
+    };
+  }
+  async function scanOrganization(input: string) {
+    const listing = await listGitHubOrganization(input, github);
+    const results = new Map<string, Awaited<ReturnType<typeof scanRepository>>>();
+    const failures = new Map<string, string>();
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(4, listing.repositories.length) }, async () => {
+      while (next < listing.repositories.length) {
+        const id = listing.repositories[next++];
+        try {
+          results.set(id, await scanRepository(`https://github.com/${id}`));
+        } catch (error) {
+          if (!(error instanceof AtlasError)) throw error;
+          failures.set(id, `${id}: ${error.message}; skipped; results may omit project skills`);
+        }
+      }
+    }));
+    const repositories = listing.repositories.flatMap((id) => results.has(id) ? [results.get(id)!] : []);
+    return {
+      organization: listing.organization,
+      repositoryCount: listing.repositories.length,
+      repositories,
+      skills: repositories.flatMap((result) => result.skills),
+      warnings: [...listing.warnings, ...listing.repositories.flatMap((id) =>
+        failures.has(id) ? [failures.get(id)!] : results.get(id)!.warnings.map((warning) => `${id}: ${warning}`))],
+    };
+  }
   return createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Cache-Control', 'no-store');
@@ -31,25 +74,21 @@ export function createWebServer(options: Options = {}) {
       }
       const url = new URL(request.url ?? '/', 'http://localhost');
       if (url.pathname === '/api/scan') {
+        if (url.searchParams.has('organization')) {
+          const input = (url.searchParams.get('organization') ?? '').trim();
+          if (url.searchParams.has('repository') || !parseGitHubOrganization(input)) {
+            json(400, { error: 'Enter a GitHub organization name or URL, such as https://github.com/JetBrains. Choose only one scan target.' });
+            return;
+          }
+          json(200, await scanOrganization(input));
+          return;
+        }
         const input = (url.searchParams.get('repository') ?? '').trim();
         if (!parseGitHubUrl(input)) {
           json(400, { error: 'Enter a GitHub repository URL, such as https://github.com/owner/repository.' });
           return;
         }
-        const source = await open(input);
-        const contents = new Map<string, string>();
-        const result = await scan({
-          ...source,
-          read: async (path) => {
-            const bytes = await source.read(path);
-            if (bytes) contents.set(path, new TextDecoder().decode(bytes));
-            return bytes;
-          },
-        });
-        json(200, {
-          ...result,
-          skills: result.skills.map((skill) => ({ ...skill, link: skillLink(result.repository, skill), content: contents.get(skill.path) })),
-        });
+        json(200, await scanRepository(input));
         return;
       }
       const asset = assets.get(url.pathname);
@@ -62,7 +101,7 @@ export function createWebServer(options: Options = {}) {
       response.end(bytes);
     } catch (error) {
       json(error instanceof AtlasError ? 502 : 500, {
-        error: error instanceof AtlasError ? error.message : 'Unable to scan the repository. Please try again.',
+        error: error instanceof AtlasError ? error.message : 'Unable to scan the repository or organization. Please try again.',
       });
     }
   });

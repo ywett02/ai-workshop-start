@@ -74,3 +74,8 @@ local repositories or recorded GitHub responses rather than live repository
 contents. Acceptance coverage lives in `tests/project-skills.test.ts` and
 `tests/github-scan.test.ts`. The live performance check in `tests/performance.test.ts` runs
 only with `SKILL_ATLAS_LIVE_TESTS=1`; offline results do not verify GitHub latency.
+
+The web view can also scan an entire GitHub organization by enumerating its
+accessible repositories and applying these same rules independently to each.
+See [organization scans](web.md#organization-scans). CLI inputs remain repository
+URLs or local directories.

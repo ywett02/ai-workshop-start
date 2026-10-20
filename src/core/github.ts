@@ -20,6 +20,38 @@ export function parseGitHubUrl(input: string): { owner: string; repo: string } |
   return match ? { owner: match[1], repo: match[2] } : undefined;
 }
 
+/** Organization login or its GitHub profile URL; repository URLs are excluded. */
+export function parseGitHubOrganization(input: string): string | undefined {
+  const match = /^(?:(?:https?:\/\/)?(?:www\.)?github\.com\/)?([a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?)\/?$/i.exec(input.trim());
+  return match && !match[1].includes('--') ? match[1] : undefined;
+}
+
+/** Enumerate all visible repositories, preserving partial results on a later page failure. */
+export async function listGitHubOrganization(input: string, options: GitHubOptions) {
+  const name = parseGitHubOrganization(input);
+  if (!name) throw new AtlasError(`Not a GitHub organization: ${input}`);
+  const github = client(options);
+  const { login } = await github.json<{ login: string }>(
+    `${API}/orgs/${name}`, `Organization not found: https://github.com/${name}`,
+  );
+  const repositories = new Set<string>();
+  const warnings: string[] = [];
+  for (let page = 1; ; page++) {
+    try {
+      const items = await github.json<{ full_name: string }[]>(
+        `${API}/orgs/${login}/repos?type=all&per_page=100&page=${page}`,
+      );
+      for (const item of items) repositories.add(item.full_name);
+      if (items.length < 100) break;
+    } catch (error) {
+      if (page === 1) throw error;
+      warnings.push(`Organization repository listing is incomplete and may omit repositories and project skills: ${describe(error)}`);
+      break;
+    }
+  }
+  return { organization: login, repositories: [...repositories].sort(), warnings };
+}
+
 /** Resolves the default branch to a commit and lists the files that may be skills. */
 export async function openGitHub(input: string, options: GitHubOptions): Promise<Source> {
   const name = parseGitHubUrl(input);
@@ -150,7 +182,7 @@ function client({ fetch, token }: GitHubOptions) {
     },
     /** A file's bytes at the scanned commit, or undefined if it is not there. */
     async raw(url: string): Promise<Uint8Array | undefined> {
-      const response = await get(url);
+      const response = await get(url, { headers });
       if (response.status === 404) return undefined;
       if (!response.ok) throw new AtlasError(`GitHub answered ${response.status} for ${url}`);
       return new Uint8Array(await response.arrayBuffer());
