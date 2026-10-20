@@ -5,7 +5,7 @@ description: Use when asked to address, fix, or respond to review comments or un
 
 # Address review
 
-Scan the open pull requests and work through every unresolved review thread: fix what is valid, reply in each thread, and resolve the threads you addressed.
+Update the existing open pull requests with fixes for their unresolved review threads. Push the fixes to each PR's own branch, reply in each thread, and resolve the threads you addressed. Never open a new PR or a separate fix branch.
 
 ## 1. Find PRs with unresolved threads
 
@@ -36,7 +36,7 @@ Scan the open pull requests and work through every unresolved review thread: fix
 
 For each PR:
 
-1. Check out its branch: `gh pr checkout <number>`, then `npm ci`.
+1. Check out its branch: `gh pr checkout <number>`, then `npm ci`. Run `git pull` so you start from the PR's latest commit.
 2. Also read top-level review bodies and PR comments (`gh pr view <number> --comments`); they cannot be resolved, but may ask for changes.
 3. For each unresolved thread, read the whole thread, the code it points to, and the relevant files in `spec/`. An outdated thread may already be fixed; check the current code before changing anything.
 
@@ -53,7 +53,7 @@ Verify each claim against the code before acting; do not accept or reject a comm
 
 1. Apply the fixes, following `AGENTS.md`: update `spec/` when behavior changes, and add or update an integration test for every changed spec case.
 2. Run `npm test` and `npm run typecheck`; both must pass.
-3. Commit with a conventional message that names what changed (for example `fix: reject empty title`), and push. Several related threads may share one commit.
+3. Commit with a conventional message that names what changed (for example `fix: reject empty title`), and push to the PR's branch with `git push`; `gh pr checkout` already set the upstream. Several related threads may share one commit. Do not force-push or rebase, since that would rewrite the history the reviewer has already seen.
 
 ## 4. Reply and resolve
 
@@ -84,6 +84,7 @@ Answer top-level review or PR comments that asked for changes with one PR commen
 
 ## Done when
 
+- Every fix is pushed to the existing PR it belongs to.
 - On every scanned PR, each unresolved thread has a reply, and each addressed thread is resolved.
 - `npm test` and `npm run typecheck` pass locally on each changed branch, and CI is green.
 - You reply with one line per PR: its link, the threads resolved, and the threads left open with why. List skipped PRs with the reason.
