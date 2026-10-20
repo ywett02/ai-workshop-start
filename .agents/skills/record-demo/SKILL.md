@@ -34,7 +34,7 @@ Videos fail silently: a missed selector or a timeout still produces a file. Insp
 $ node .agents/skills/record-demo/scripts/frames.ts docs/demo/skill-filter.webm <scratch-dir> 1 10 18
 ```
 
-This prints the duration and saves PNGs (and a `frames-viewer.html`) to a scratch directory, never the repository. Run it once with `1` to learn the duration. Then run it again with one timestamp per planned state, estimated from the scenario's pauses, and Read each PNG. Check that each state is visible: counts, highlights, the selected document, and organization progress. Re-record if a state is missing.
+This creates the scratch directory (including missing parents), prints the duration, and saves PNGs (and a `frames-viewer.html`) there, never in the repository. An existing scratch directory also works. Run it once with `1` to learn the duration. Then run it again with one timestamp per planned state, estimated from the scenario's pauses, and Read each PNG. Check that each state is visible: counts, highlights, the selected document, and organization progress. Re-record if a state is missing.
 
 ## Done when
 

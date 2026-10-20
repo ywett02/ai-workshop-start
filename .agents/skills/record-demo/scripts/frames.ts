@@ -2,12 +2,13 @@
 // (Playwright's bundled ffmpeg only encodes; it cannot extract frames).
 // Usage: node .agents/skills/record-demo/scripts/frames.ts <video.webm> <out-dir> <seconds...>
 import { chromium } from '@playwright/test';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 
 const [video, outDir, ...times] = process.argv.slice(2);
 if (!video || !outDir || !times.length) throw new Error('Usage: frames.ts <video.webm> <out-dir> <seconds...>');
 const viewer = resolve(outDir, 'frames-viewer.html');
+mkdirSync(outDir, { recursive: true });
 writeFileSync(viewer, `<body style="margin:0"><video muted preload="auto" style="width:1280px" src="file://${resolve(video)}"></video>`);
 
 const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
