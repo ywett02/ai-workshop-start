@@ -78,9 +78,31 @@ jobs:
 
   # Shows what e2e found in one pull request comment, with each changed screenshot's expected,
   # actual and diff images. Images go to the e2e-diffs branch, since comments cannot attach files.
+  e2e-report-targets:
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      prs: ${{ steps.targets.outputs.prs }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - id: targets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/e2e-report-targets.ts
+
   e2e-report:
-    needs: e2e
-    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: [e2e, e2e-report-targets]
+    if: ${{ !cancelled() && needs.e2e-report-targets.result == 'success' && needs.e2e-report-targets.outputs.prs != '[]' }}
+    strategy:
+      matrix:
+        pr: ${{ fromJSON(needs.e2e-report-targets.outputs.prs) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -88,8 +110,8 @@ jobs:
       pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
-      PR: ${{ github.event.pull_request.number }}
-      IMAGES: pr-${{ github.event.pull_request.number }}/${{ github.run_id }}-${{ github.run_attempt }}
+      PR: ${{ matrix.pr }}
+      IMAGES: pr-${{ matrix.pr }}/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -120,10 +142,18 @@ jobs:
           mkdir -p "$diffs/$IMAGES" && cp report/images/*.png "$diffs/$IMAGES/"
           git -C "$diffs" add --all && git -C "$diffs" commit -qm "e2e screenshots for #$PR"
           # Other pull requests may publish at the same time; their files never overlap.
+          published=false
           for attempt in 1 2 3; do
-            git -C "$diffs" push -q origin HEAD:e2e-diffs && break
+            if git -C "$diffs" push -q origin HEAD:e2e-diffs; then
+              published=true
+              break
+            fi
             git -C "$diffs" fetch -q --depth 1 origin e2e-diffs && git -C "$diffs" rebase -q FETCH_HEAD
           done
+          if [ "$published" != true ]; then
+            echo "::error::Could not publish screenshot images after three attempts."
+            exit 1
+          fi
       - name: Comment on the pull request
         run: |
           id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
