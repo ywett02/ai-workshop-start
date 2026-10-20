@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Skill Atlas · Repository explorer</title>
+  <title>Skill Atlas · Skill explorer</title>
   <link rel="stylesheet" href="/style.css">
   <script type="module" src="/app.js"></script>
 </head>
@@ -13,9 +13,10 @@
     <section class="intro">
       <p class="eyebrow">REPOSITORY EXPLORER</p>
       <h1>A map of your agent skills.</h1>
-      <p class="subtitle">Discover the skills in a repository. Read the instructions that power them.</p>
+      <p class="subtitle">Discover the skills in a repository or organization. Read the instructions that power them.</p>
       <form id="scan-form">
-        <label for="repository">GitHub repository</label>
+        <div class="scope-row"><label for="scope">Scan scope</label><select id="scope" name="scope"><option value="repository">Repository</option><option value="organization">Organization</option></select></div>
+        <label id="target-label" for="repository">GitHub repository</label>
         <div class="input-row"><span class="input-icon" aria-hidden="true">↗</span><input id="repository" name="repository" type="text" placeholder="https://github.com/owner/repository" required autocomplete="url" spellcheck="false" aria-describedby="input-help"><button id="scan-button" type="submit">Explore repository <span aria-hidden="true">→</span></button></div>
         <p id="input-help">Project skills from .agents, .claude, .github, and agent/skills. Copies are grouped together.</p>
       </form>
@@ -37,7 +38,7 @@
         <div id="document-empty" class="document-empty"><span class="file-symbol" aria-hidden="true">⌘</span><h2>Instructions, in focus.</h2><p>Select a skill to explore its SKILL.md.<br>Every file is read from the scanned commit.</p><span class="file-tag">SKILL.md</span></div>
         <div id="document" hidden>
           <div class="document-heading"><div><p class="eyebrow">SKILL DOCUMENT</p><h2 id="skill-name"></h2></div><a id="source-link" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></div>
-          <p id="skill-description"></p><p id="skill-path"></p><p id="skill-copies" hidden></p>
+          <p id="skill-repository"></p><p id="skill-description"></p><p id="skill-path"></p><p id="skill-copies" hidden></p>
           <div class="code-heading"><span>SKILL.md</span><span>Source · Markdown</span></div>
           <pre id="skill-content" tabindex="0" aria-label="SKILL.md source"></pre>
         </div>

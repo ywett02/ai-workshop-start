@@ -44,3 +44,41 @@ the port. The server binds to loopback. No build step is required.
 HTTP integration coverage lives in `tests/web.test.ts`. Browser acceptance
 coverage lives in `tests/web-browser.test.ts` and runs through `npm test`, using
 recorded/local sources rather than live GitHub contents.
+
+## Organization scans
+
+- Choose Repository (the default) or Organization. Organization mode accepts a
+  GitHub organization URL, with the same optional scheme and trailing slash as
+  repository URLs, or a bare organization login. Reject repository URLs, local
+  paths, other hosts, and invalid logins in organization mode.
+- `GET /api/scan?organization=<input>` scans every repository visible to the
+  server's GitHub credentials, including forks and archived repositories. Without
+  a token only public repositories are visible. Resolve the organization first;
+  personal accounts are not organizations. Follow every repository-list page,
+  deduplicate repositories, and scan at most four repositories concurrently.
+- Return the organization login, number of discovered repositories, successful
+  repository results, flattened skills, and warnings. Order repositories by ID
+  using case-sensitive comparison and skills within each repository by the usual
+  name/path order. Preserve distinct IDs for same-named skills across repositories.
+- Use the existing repository discovery, copy grouping, metadata, source, and
+  commit-pinned links. Display repository headings (including repositories with zero skills),
+  per-repository counts and commits, a total skill count, and the selected skill's
+  repository. Selecting a skill never refetches its contents.
+- The skill filter applies across all repositories. While filtering, show only
+  repository headings that have matching skills; counts cover the organization total.
+- A failed repository is skipped with a repository-specific warning; other
+  repositories still appear. Failure on a later listing page retains earlier
+  repositories with an explicit incomplete-listing warning. All discovery and
+  skill warnings include their repository. Partial results are explicitly labeled
+  as possibly incomplete. A missing organization, rejected token, rate limit, or
+  failure on the first listing page is an error that allows a retry.
+- An organization with no repositories or no skills is a successful empty state.
+  Disable both the input and mode selector while scanning; clear earlier results,
+  announce organization loading/status, and allow switching back to repository
+  mode. Organization controls and selection work with a keyboard on narrow screens.
+- Tokens stay on the server, including authenticated source reads. No organization
+  or repository text is interpreted as HTML. Ambiguous API requests specifying
+  both repository and organization inputs are rejected.
+
+Organization acceptance coverage is in `tests/organization.test.ts` and
+`tests/web-browser.test.ts`, using recorded GitHub responses.
