@@ -56,6 +56,10 @@ recorded/local sources rather than live GitHub contents.
   a token only public repositories are visible. Resolve the organization first;
   personal accounts are not organizations. Follow every repository-list page,
   deduplicate repositories, and scan at most four repositories concurrently.
+- Organization scans find skills through each repository's Git tree, even with a
+  token: GitHub allows ten code searches a minute, so searching every repository
+  would take minutes. Reuse each repository's default branch from the listing
+  instead of asking for the repository again.
 - Return the organization login, number of discovered repositories, successful
   repository results, flattened skills, and warnings. Order repositories by ID
   using case-sensitive comparison and skills within each repository by the usual

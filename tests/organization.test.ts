@@ -27,6 +27,8 @@ test('organization HTTP scan preserves repositories, independent identities, pin
   assert.equal(JSON.stringify(result).includes('server-secret'), false);
   assert.equal(app.calls.filter((c) => c.url === rawUrl('Example/alpha', PATH)).length, 1);
   for (const call of app.calls) assert.equal(call.headers?.Authorization, 'Bearer server-secret');
+  // Code search allows ten requests a minute; the listing already names each default branch.
+  assert.deepEqual(app.calls.filter((c) => c.url.includes('/search/') || /\/repos\/[^/]+\/[^/]+$/.test(c.url)), []);
 });
 
 test('organization scan follows all pages, deduplicates, and keeps alphabetical repository order', async (t) => {
@@ -155,7 +157,7 @@ test('organization HTTP scan preserves healthy repositories when a response body
   ] };
   const recordedFetch = replay(recording);
   const server = createWebServer({ github: { fetch: async (input, init) => {
-    if (String(input) === `${API}/repos/${ORG}/alpha`) {
+    if (String(input) === `${API}/repos/${ORG}/alpha/commits/main`) {
       return new Response(new ReadableStream({
         start(controller) {
           controller.enqueue(new TextEncoder().encode('{"full_name":'));

@@ -1,11 +1,11 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { listGitHubOrganization, openGitHub, parseGitHubOrganization, parseGitHubUrl, type GitHubOptions } from './core/github.ts';
+import { listGitHubOrganization, openGitHub, parseGitHubOrganization, parseGitHubUrl, type GitHubOptions, type KnownRepository } from './core/github.ts';
 import { AtlasError } from './core/errors.ts';
 import { skillLink } from './core/model.ts';
 import { scan, type Source } from './core/scan.ts';
 
-type Options = { open?: (input: string) => Promise<Source>; github?: GitHubOptions };
+type Options = { open?: (input: string, known?: KnownRepository) => Promise<Source>; github?: GitHubOptions };
 const assets = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
@@ -15,9 +15,11 @@ const assets = new Map([
 /** Local, read-only web client; tokens and repository fetching stay on the server. */
 export function createWebServer(options: Options = {}) {
   const github = options.github ?? { fetch, token: process.env.GITHUB_TOKEN || undefined };
-  const open = options.open ?? ((input: string) => openGitHub(input, github));
-  async function scanRepository(input: string) {
-    const source = await open(input);
+  const open = options.open ?? ((input: string, known?: KnownRepository) =>
+    // One repository at a time can afford code search; a whole organization cannot.
+    openGitHub(input, known ? { ...github, search: false } : github, known));
+  async function scanRepository(input: string, known?: KnownRepository) {
+    const source = await open(input, known);
     const contents = new Map<string, string>();
     const result = await scan({
       ...source,
@@ -39,9 +41,10 @@ export function createWebServer(options: Options = {}) {
     let next = 0;
     await Promise.all(Array.from({ length: Math.min(4, listing.repositories.length) }, async () => {
       while (next < listing.repositories.length) {
-        const id = listing.repositories[next++];
+        const index = next++;
+        const id = listing.repositories[index];
         try {
-          results.set(id, await scanRepository(`https://github.com/${id}`));
+          results.set(id, await scanRepository(`https://github.com/${id}`, listing.known[index]));
         } catch (error) {
           const message = error instanceof AtlasError ? error.message : 'Unable to scan repository. Please try again.';
           failures.set(id, `${id}: ${message}; skipped; results may omit project skills`);

@@ -10,11 +10,11 @@ export const PATH = '.agents/skills/check/SKILL.md';
 export function organizationRecording(): Recording {
   return {
     [orgUrl]: { status: 200, body: { login: ORG } },
-    [pageUrl()]: { status: 200, body: ['zeta', 'empty', 'alpha', 'broken'].map((name) => ({ full_name: `${ORG}/${name}` })) },
+    [pageUrl()]: { status: 200, body: ['zeta', 'empty', 'alpha', 'broken'].map((name) => ({ full_name: `${ORG}/${name}`, default_branch: 'main' })) },
     ...githubRecording(`${ORG}/alpha`, { [PATH]: skill('Shared', '<script>window.pwned=true</script>') }),
     ...githubRecording(`${ORG}/zeta`, { [PATH]: skill('Shared', 'Second repository.') }),
     ...githubRecording(`${ORG}/empty`, {}),
-    [`${API}/repos/${ORG}/broken`]: { status: 404, body: { message: 'Not Found' } },
+    [`${API}/repos/${ORG}/broken/commits/main`]: { status: 404, body: { message: 'Not Found' } },
   };
 }
 export async function organizationFixture(recording = organizationRecording(), token?: string) {
