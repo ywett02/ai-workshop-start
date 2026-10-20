@@ -5,7 +5,7 @@ import { openGitHub } from '../src/core/github.ts';
 import { skillLink } from '../src/core/model.ts';
 import { replay } from '../src/core/replay.ts';
 import { scan } from '../src/core/scan.ts';
-import { EXAMPLE_COMMIT } from './helpers.ts';
+import { EXAMPLE_COMMIT, runAtlas } from './helpers.ts';
 import { API, githubRecording, rawUrl, scanGitHub, searchUrl, skill, type GitTree } from './scenarios.ts';
 
 const id = 'JetBrains/project';
@@ -14,6 +14,46 @@ const copy = '.claude/skills/check/SKILL.md';
 const good = '.github/skills/good/SKILL.md';
 const pinnedLink = (path: string) => `https://github.com/${id}/blob/${EXAMPLE_COMMIT}/${path.split('/').map(encodeURIComponent).join('/')}`;
 const incompleteWarning = /incomplete|partial|truncat|may (?:omit|miss)|not exhaustive/i;
+
+for (const token of [undefined, 'test-token']) {
+  test(`explicit historical commit ${token ? 'with' : 'without'} a token: discover, read, and link at that commit`, async () => {
+    const commit = '1234567890abcdef1234567890abcdef12345678';
+    const path = '.agents/skills/historical/SKILL.md';
+    const recording = Object.fromEntries(Object.entries(githubRecording(id, { [path]: skill('historical') }))
+      .filter(([url]) => !url.includes('/search/') && !url.endsWith('/commits/main'))
+      .map(([url, answer]) => [url.replaceAll(EXAMPLE_COMMIT, commit), answer]));
+    recording[`${API}/repos/${id}/commits/${commit}`] = { status: 200, body: { sha: commit } };
+    const recorded = replay(recording);
+    const requests: string[] = [];
+    const result = await runAtlas(['scan', `github.com/${id}/tree/${commit}`], (input) => openGitHub(input, {
+      token,
+      fetch: (url, init) => {
+        requests.push(url);
+        if (url.startsWith(API)) assert.equal(init?.headers?.Authorization, token ? `Bearer ${token}` : undefined);
+        return recorded(url, init);
+      },
+    }));
+    assert.deepEqual(result, {
+      code: 0,
+      stdout: `${id} · 1 skill\nhistorical — Check the project.\n  https://github.com/${id}/blob/${commit}/${path}`,
+      stderr: '',
+    });
+    assert.ok(requests.includes(`${API}/repos/${id}/git/trees/${commit}?recursive=1`));
+    assert.ok(requests.includes(`https://raw.githubusercontent.com/${id}/${commit}/${path}`));
+    assert.ok(requests.every((url) => !url.includes('/search/') && !url.includes('/commits/main')));
+  });
+}
+
+test('a missing explicit commit fails clearly instead of scanning the default branch', async () => {
+  const commit = '1234567890abcdef1234567890abcdef12345678';
+  const recording = githubRecording(id, { [canonical]: skill() });
+  recording[`${API}/repos/${id}/commits/${commit}`] = { status: 404, body: { message: 'Not Found' } };
+  const result = await runAtlas(['scan', `https://github.com/${id}/tree/${commit}`], (input) =>
+    openGitHub(input, { fetch: replay(recording) }));
+  assert.deepEqual(result, {
+    code: 1, stdout: '', stderr: `Not found on GitHub: ${API}/repos/${id}/commits/${commit}`,
+  });
+});
 
 for (const token of [undefined, 'test-token']) {
   const method = token ? 'authenticated search' : 'unauthenticated tree';

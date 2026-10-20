@@ -14,13 +14,14 @@ export type GitHubOptions = {
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
 
-/** `https://github.com/owner/repo`, with or without the scheme, a trailing slash or `.git`. */
-export function parseGitHubUrl(input: string): { owner: string; repo: string } | undefined {
-  const match = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(input.trim());
-  return match ? { owner: match[1], repo: match[2] } : undefined;
+/** Repository URLs, optionally pinned with `/tree/<full commit SHA>`. */
+export function parseGitHubUrl(input: string): { owner: string; repo: string; commit?: string } | undefined {
+  const match = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/tree\/([a-f0-9]{40}))?\/?$/i.exec(input.trim());
+  if (!match) return undefined;
+  return { owner: match[1], repo: match[2], ...(match[3] && { commit: match[3] }) };
 }
 
-/** Resolves the default branch to a commit and lists the files that may be skills. */
+/** Resolves the requested commit (or default branch) and lists possible skill files. */
 export async function openGitHub(input: string, options: GitHubOptions): Promise<Source> {
   const name = parseGitHubUrl(input);
   if (!name) throw new AtlasError(`Not a GitHub repository URL: ${input}`);
@@ -30,9 +31,14 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
     `Repository not found: https://github.com/${name.owner}/${name.repo}`,
   );
   const id = info.full_name;
-  const { sha } = await github.json<{ sha: string }>(`${API}/repos/${id}/commits/${encodePath(info.default_branch)}`);
+  const ref = name.commit ?? info.default_branch;
+  const { sha } = await github.json<{ sha: string }>(`${API}/repos/${id}/commits/${encodePath(ref)}`);
   const warnings: string[] = [];
-  const paths = options.token ? await searchPaths(github, id, sha, warnings) : await treePaths(github, id, sha, warnings);
+  // Code search only indexes the default branch. Historical scans must discover
+  // paths from the requested commit, even when a token is available.
+  const paths = options.token && !name.commit
+    ? await searchPaths(github, id, sha, warnings)
+    : await treePaths(github, id, sha, warnings);
   const [organization, repo] = id.split('/');
   return {
     repository: { id, organization, name: repo, url: `https://github.com/${id}`, commit: sha },

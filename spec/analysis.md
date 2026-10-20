@@ -2,7 +2,8 @@
 
 ## Input
 
-A **GitHub repository** URL, or a local directory
+A **GitHub repository** URL, optionally ending in `/tree/<full 40-character commit SHA>`,
+or a local directory. An unpinned URL scans the default branch's resolved commit.
 
 ## Output
 
@@ -21,6 +22,9 @@ copy paths. The ID uses the canonical path, not the display name.
 - The display name: nonempty front-matter name, else the skill directory name
 - The description: full front-matter description, else an empty string
 - GitHub files are read at the *scanned commit*, and links pin that commit
+- An explicit commit pins discovery as well as file reads and links. Use Git
+  trees even with `GITHUB_TOKEN`, because code search only indexes the default
+  branch. A missing commit fails with exit code 1; never fall back to the default branch.
 - Authenticated search candidates are checked against commit-pinned Git trees
   to exclude symbolic links, including linked ancestor directories
 - Local scans inspect the current directory and use file links; commit is empty
@@ -69,8 +73,19 @@ The four edge cases have these expected outcomes:
 | Part of the product (JetBrains/MPS) | `plugins/mcp-tools/resources/…/skills/mps-aspect-generator/SKILL.md` | Exclude: outside the allowed roots. |
 | Test data (JetBrains/koog) | `integration-tests/src/jvmTest/resources/skills/weather-retrieval/SKILL.md` | Exclude: outside the allowed roots. |
 
-Integration tests must cover these cases and the boundary rules above, using
+Offline integration tests must cover these cases and the boundary rules above, using
 local repositories or recorded GitHub responses rather than live repository
 contents. Acceptance coverage lives in `tests/project-skills.test.ts` and
 `tests/github-scan.test.ts`. The live performance check in `tests/performance.test.ts` runs
 only with `SKILL_ATLAS_LIVE_TESTS=1`; offline results do not verify GitHub latency.
+
+Live end-to-end acceptance tests in `tests/e2e/repositories.test.ts` run the actual
+`./skill-atlas scan github.com/<repository>/tree/<commit>` executable against
+JetBrains/MPS, JetBrains/android, and JetBrains/koog at the full commit SHAs in
+`tests/e2e/repositories.ts`. Compare stdout and stderr exactly (including trailing
+newlines) with the checked-in text files in `tests/e2e/expected/`, and require exit
+code 0. These exercise MPS copy grouping and product exclusion, Android's
+`agent/skills` root, and koog's test-data exclusion on real repositories.
+`npm run test:e2e` requires network access; CI runs it with `GITHUB_TOKEN`.
+Network failures, rate limits, timeouts, and unexpected output fail these tests.
+`npm test` keeps the offline integration suite independent of GitHub availability.

@@ -1,5 +1,6 @@
 # Command line
 `./skill-atlas scan <GitHub URL | directory>`
+To scan a fixed commit, use `./skill-atlas scan github.com/<owner>/<repo>/tree/<full SHA>`.
 Prints the result **at once**; *nothing is stored*.
 `GITHUB_TOKEN`, optional: a higher GitHub rate limit.
 The result contains [project skills](analysis.md#what-is-a-project-skill); product skills and test

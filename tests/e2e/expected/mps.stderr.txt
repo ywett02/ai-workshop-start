@@ -1,0 +1,1 @@
+warning: the tree listing is truncated; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills; results may omit project skills

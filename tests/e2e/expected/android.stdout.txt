@@ -1,0 +1,9 @@
+JetBrains/android · 4 skills
+android-studio-development — Specialist in Android Studio plugin development.
+  https://github.com/JetBrains/android/blob/4d9ec3e52b338aa1c962c1ff0421cc62db5c73af/agent/skills/android-studio-development/SKILL.md
+android-studio-diagnostics-analysis — Analyzes Android Studio diagnostic logs and thread dumps to identify UI freezes, lock contention, and system configuration issues.
+  https://github.com/JetBrains/android/blob/4d9ec3e52b338aa1c962c1ff0421cc62db5c73af/agent/skills/android-studio-diagnostics-analysis/SKILL.md
+write-evals — Expertise in building new AI agent evaluations (evals) for Android Studio.
+  https://github.com/JetBrains/android/blob/4d9ec3e52b338aa1c962c1ff0421cc62db5c73af/agent/skills/android-studio-evals/SKILL.md
+writing-lint-checks — Helps to write a new lint check under `/tools/base/lint/libs/lint-checks`.
+  https://github.com/JetBrains/android/blob/4d9ec3e52b338aa1c962c1ff0421cc62db5c73af/agent/skills/writing-lint-checks/SKILL.md
