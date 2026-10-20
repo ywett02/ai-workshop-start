@@ -73,13 +73,15 @@ export function createWebServer(options: Options = {}) {
   }
   /** One JSON line per event, so the page can show repositories while the rest are scanned. */
   async function streamOrganization(input: string, response: ServerResponse) {
+    // A page that leaves closes the scan, even while repositories are still being listed;
+    // stop starting repositories for it.
+    let closed = false;
+    response.on('close', () => { closed = true; });
     const listing = await listGitHubOrganization(input, github);
+    if (closed) return;
     response.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8' });
     const line = (event: unknown) => response.write(`${JSON.stringify(event)}\n`);
     line({ type: 'start', organization: listing.organization, repositoryCount: listing.repositories.length, warnings: listing.warnings });
-    // A page that starts another scan closes this one; stop starting repositories for it.
-    let closed = false;
-    response.on('close', () => { closed = true; });
     await scanRepositories(listing, (scan) => line({ type: 'repository', ...scan }), () => closed);
     response.end(`${JSON.stringify({ type: 'done' })}\n`);
   }

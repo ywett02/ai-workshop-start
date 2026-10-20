@@ -221,3 +221,40 @@ test('organization stream reports a missing organization as an ordinary retryabl
   assert.equal(response.status, 502);
   assert.match((await response.json() as { error: string }).error, /Organization not found/);
 });
+
+test('organization stream starts no repository scans for a page that left during the listing', async (t) => {
+  const { createWebServer } = await import('../src/server.ts');
+  const { replay } = await import('../src/core/replay.ts');
+  const { get } = await import('node:http');
+  const recorded = replay(organizationRecording());
+  let listing!: () => void;
+  const listed = new Promise<void>((resolve) => { listing = resolve; });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const opened: string[] = [];
+  const server = createWebServer({
+    github: { fetch: async (url, init) => {
+      if (url === pageUrl()) {
+        listing();
+        await gate;
+      }
+      return recorded(url, init);
+    } },
+    open: async (input) => {
+      opened.push(input);
+      throw new Error('not scanned');
+    },
+  });
+  const app = await listen(server);
+  t.after(app.close);
+  const request = get(`${app.url}/api/scan?organization=${ORG}`, { headers: { Accept: 'application/x-ndjson' } });
+  request.on('error', () => {});
+  await listed;
+  request.destroy();
+  while (await new Promise<number>((resolve, reject) => server.getConnections((error, count) => error ? reject(error) : resolve(count)))) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(opened, []);
+});

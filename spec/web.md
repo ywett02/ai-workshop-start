@@ -71,8 +71,9 @@ recorded/local sources rather than live GitHub contents.
   Errors before `start` are ordinary JSON errors. The page inserts each repository
   in ID order, shows how many repositories have been checked and skills found so
   far, and keeps the filter, selection, and keyboard focus as results arrive. A
-  stream that ends without `done` keeps the results so far and reports that they
-  may be incomplete. When the page disconnects, no further repositories are started.
+  stream that ends or breaks without `done` keeps the results so far and reports
+  that they may be incomplete, with a retry. When the page disconnects, even while
+  repositories are still being listed, no further repositories are started.
 - Use the existing repository discovery, copy grouping, metadata, source, and
   commit-pinned links. Display repository headings (including repositories with zero skills),
   per-repository counts and commits, a total skill count, and the selected skill's
