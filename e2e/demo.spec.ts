@@ -18,9 +18,12 @@ async function start(recording: ReturnType<typeof repositoryRecording>) {
   return { ...await listen(createWebServer({ github: { fetch: github.fetch } })), hold: github.hold };
 }
 
-/** A key moment: compared with its baseline, then held for a second so the video shows it. */
+/**
+ * A key moment: compared with its baseline, then held for a second so the video shows it.
+ * A mismatch does not stop the test, so every changed moment is reported.
+ */
 async function snapshot(page: Page, name: string) {
-  await expect(page).toHaveScreenshot(name, { fullPage: true });
+  await expect.soft(page).toHaveScreenshot(name, { fullPage: true });
   await page.waitForTimeout(1000);
 }
 

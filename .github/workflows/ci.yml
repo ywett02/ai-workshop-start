@@ -75,3 +75,61 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ github.token }}
         run: node scripts/check-baselines.ts
+
+  # Shows what e2e found in one pull request comment, with each changed screenshot's expected,
+  # actual and diff images. Images go to the e2e-diffs branch, since comments cannot attach files.
+  e2e-report:
+    needs: e2e
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      IMAGES: pr-${{ github.event.pull_request.number }}/${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: e2e-results
+          path: e2e-results/
+      - name: Write the report
+        run: |
+          node scripts/e2e-report.ts e2e-results/test-results/results.json report \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/e2e-diffs/$IMAGES" \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          cat report/comment.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish the images
+        if: ${{ hashFiles('report/images/*.png') != '' }}
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          diffs="$RUNNER_TEMP/e2e-diffs"
+          if git fetch --depth 1 origin e2e-diffs; then
+            git worktree add --detach "$diffs" FETCH_HEAD
+          else
+            git worktree add --detach "$diffs" && git -C "$diffs" checkout --orphan e2e-diffs && git -C "$diffs" rm -rfq .
+          fi
+          mkdir -p "$diffs/$IMAGES" && cp report/images/*.png "$diffs/$IMAGES/"
+          git -C "$diffs" add --all && git -C "$diffs" commit -qm "e2e screenshots for #$PR"
+          # Other pull requests may publish at the same time; their files never overlap.
+          for attempt in 1 2 3; do
+            git -C "$diffs" push -q origin HEAD:e2e-diffs && break
+            git -C "$diffs" fetch -q --depth 1 origin e2e-diffs && git -C "$diffs" rebase -q FETCH_HEAD
+          done
+      - name: Comment on the pull request
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- e2e-screenshots -->")) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@report/comment.md > /dev/null
+          elif [ -f report/failed ]; then
+            gh pr comment "$PR" --body-file report/comment.md
+          fi
