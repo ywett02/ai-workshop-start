@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { organizationFixture, organizationRecording, ORG, orgUrl, pageUrl, PATH } from './organization-helpers.ts';
 import { API, githubRecording, rawUrl } from './scenarios.ts';
 import { EXAMPLE_COMMIT } from './helpers.ts';
+import { listen } from './web-helpers.ts';
 import type { ScanResult } from '../src/core/scan.ts';
 import type { Skill } from '../src/core/model.ts';
 
@@ -136,11 +137,9 @@ test('organization HTTP scan bounds concurrent repository work and restores orde
     completed.push(id);
     return { repository: { id, organization: ORG, name: id.split('/')[1], url: input, commit: EXAMPLE_COMMIT }, paths: [], warnings: [], read: async () => undefined };
   } });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
-  const address = server.address();
-  assert.ok(address && typeof address !== 'string');
-  const result = await (await fetch(`http://127.0.0.1:${address.port}/api/scan?organization=${ORG}`)).json() as OrganizationResult;
+  const app = await listen(server);
+  t.after(app.close);
+  const result = await (await fetch(`${app.url}/api/scan?organization=${ORG}`)).json() as OrganizationResult;
   assert.equal(maximum, 4);
   assert.notEqual(completed[0], names[0]);
   assert.deepEqual(result.repositories.map((r) => r.repository.id), names);
@@ -166,11 +165,9 @@ test('organization HTTP scan preserves healthy repositories when a response body
     }
     return recordedFetch(input, init);
   } } });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
-  const address = server.address();
-  assert.ok(address && typeof address !== 'string');
-  const response = await fetch(`http://127.0.0.1:${address.port}/api/scan?organization=${ORG}`);
+  const app = await listen(server);
+  t.after(app.close);
+  const response = await fetch(`${app.url}/api/scan?organization=${ORG}`);
   assert.equal(response.status, 200);
   const result = await response.json() as OrganizationResult;
   assert.equal(result.repositoryCount, 2);

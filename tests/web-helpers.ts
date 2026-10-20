@@ -1,3 +1,4 @@
+import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { AtlasError } from '../src/core/errors.ts';
 import type { Source } from '../src/core/scan.ts';
@@ -29,10 +30,20 @@ export async function webFixture(files: Record<string, string> = FILES) {
     };
     return source;
   } });
+  return { ...await listen(server), reads };
+}
+
+/**
+ * Listens on a free local port. Closing also drops open client connections: a browser's
+ * preconnected socket never sends a request, so a plain `close()` would wait for it forever.
+ */
+export async function listen(server: Server) {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
-    reads,
-    close: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
+    close: () => new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+      server.closeAllConnections();
+    }),
   };
 }

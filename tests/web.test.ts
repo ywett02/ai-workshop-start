@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { connect } from 'node:net';
 import { test } from 'node:test';
 import { COMMIT, CONTENT, FILES, webFixture } from './web-helpers.ts';
 import type { ScanResult } from '../src/core/scan.ts';
@@ -64,4 +66,15 @@ test('local server serves only web assets with restrictive headers and GET metho
   const post = await fetch(`${app.url}/api/scan?repository=github.com/Test/skills`, { method: 'POST' });
   assert.equal(post.status, 405);
   assert.equal(post.headers.get('allow'), 'GET');
+});
+
+test('test server shuts down even when a client holds a connection without a request', async () => {
+  const app = await webFixture();
+  // Browsers preconnect sockets they may never use; shutdown must not wait for them.
+  const socket = connect(Number(new URL(app.url).port), '127.0.0.1');
+  await once(socket, 'connect');
+  await Promise.race([
+    app.close(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('server.close() waited for an idle socket')), 2_000).unref()),
+  ]);
 });

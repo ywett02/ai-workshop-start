@@ -1,7 +1,7 @@
-import type { AddressInfo } from 'node:net';
 import { createWebServer } from '../src/server.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
 import { API, githubRecording, skill } from './scenarios.ts';
+import { listen } from './web-helpers.ts';
 
 export const ORG = 'Example';
 export const orgUrl = `${API}/orgs/${ORG}`;
@@ -24,10 +24,5 @@ export async function organizationFixture(recording = organizationRecording(), t
     calls.push({ url, headers: init?.headers });
     return recorded(url, init);
   } } });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  return {
-    url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
-    calls,
-    close: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
-  };
+  return { ...await listen(server), calls };
 }
