@@ -75,6 +75,12 @@ export async function openGitHub(input: string, options: GitHubOptions, known?: 
     repository: { id, organization, name: repo, url: `https://github.com/${id}`, commit: sha },
     paths,
     warnings,
+    lastUpdated: async (path) => {
+      const commits = await github.json<{ commit?: { committer?: { date?: string } } }[]>(
+        `${API}/repos/${id}/commits?sha=${encodeURIComponent(sha)}&path=${encodeURIComponent(path)}&per_page=1`,
+      );
+      return Array.isArray(commits) ? commits[0]?.commit?.committer?.date : undefined;
+    },
     read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
   };
 }

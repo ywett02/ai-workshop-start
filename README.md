@@ -22,7 +22,10 @@ Skill Atlas: http://127.0.0.1:3000
 
 Open that address, choose Repository or Organization, enter its GitHub link, and
 select a skill to read its
-complete SKILL.md. The view shows descriptions, copy paths, scan warnings, and
+complete SKILL.md. Each skill's details show when its canonical SKILL.md was last
+updated, using the latest file commit at the scanned revision (displayed in UTC).
+Unavailable dates appear as “Unknown” with a scan warning. History lookups use one
+additional GitHub API request per skill. The view also shows descriptions, copy paths, scan warnings, and
 links pinned to the scanned commit. Organization mode also accepts a bare login
 (such as `JetBrains`) and scans every accessible repository, including forks and
 archived repositories. Skills appear as each repository is scanned, so you can
