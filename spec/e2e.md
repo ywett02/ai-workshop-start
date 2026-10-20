@@ -23,4 +23,15 @@
   default branch.
 - Baselines change only that way, never by hand or by running `--update-snapshots` locally, so
   every change is first seen failing on CI. For pull requests, CI fails when any screenshot
-  differing from the base branch was last committed by someone other than `github-actions[bot]`.
+  differing from the base branch lacks GitHub-hosted provenance for its last modifying commit.
+  The Update screenshots workflow uploads a `baseline-commit-<full SHA>` artifact after pushing
+  that commit and before starting CI. CI accepts only records belonging to this repository's
+  Update screenshots workflow (including paginated runs/artifacts), never Git author names or
+  commit-message claims. A later local edit, addition, deletion, or rename requires acceptance
+  again. Unchanged baselines require no API lookup; API failures reject changed baselines.
+  Records last 90 days; for missing or expired records, restore unaccepted baselines from the
+  base branch, then rerun the workflow to render and commit them again.
+  The record proves rendering and publication even if later cleanup or CI dispatch fails.
+
+Baseline guard integration coverage in `tests/baselines.test.ts` executes the actual CI script
+against temporary Git histories and recorded GitHub Actions API responses.
