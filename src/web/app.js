@@ -38,18 +38,43 @@ function showSkill(skill, button) {
   element('skill-content').scrollTop = 0;
 }
 
+// Lowercasing can expand a character (İ → i + combining dot). Keep UTF-16
+// source boundaries for every folded code unit, including partial matches.
+function matchRanges(text, query) {
+  if (!query) return [];
+  const starts = [];
+  const ends = [];
+  let offset = 0;
+  for (const character of text) {
+    for (let i = 0; i < character.toLowerCase().length; i++) {
+      starts.push(offset);
+      ends.push(offset + character.length);
+    }
+    offset += character.length;
+  }
+  const lower = text.toLowerCase();
+  const ranges = [];
+  let match = lower.indexOf(query);
+  while (match !== -1) {
+    const start = starts[match];
+    const end = ends[match + query.length - 1];
+    const previous = ranges.at(-1);
+    if (previous && start < previous.end) previous.end = Math.max(previous.end, end);
+    else ranges.push({ start, end });
+    match = lower.indexOf(query, match + query.length);
+  }
+  return ranges;
+}
+
 function highlightedText(text, query) {
   const fragment = document.createDocumentFragment();
-  const lower = text.toLowerCase();
   let start = 0;
-  let match = query ? lower.indexOf(query) : -1;
-  while (match !== -1) {
-    fragment.append(document.createTextNode(text.slice(start, match)));
+  for (const match of matchRanges(text, query)) {
+    fragment.append(document.createTextNode(text.slice(start, match.start)));
     const mark = document.createElement('mark');
-    mark.textContent = text.slice(match, match + query.length);
+    mark.textContent = text.slice(match.start, match.end);
     fragment.append(mark);
-    start = match + query.length;
-    match = lower.indexOf(query, start);
+    start = match.end;
   }
   fragment.append(document.createTextNode(text.slice(start)));
   return fragment;
@@ -74,7 +99,7 @@ function renderSkills() {
     name.append(highlightedText(skill.name, query));
     const description = document.createElement('span');
     const text = skill.description || skill.path;
-    const match = query ? text.toLowerCase().indexOf(query) : -1;
+    const match = matchRanges(text, query)[0]?.start ?? -1;
     // Keep a description match visible even when it is deep in a long description.
     const previewStart = Math.max(0, match - 20);
     description.append(highlightedText((previewStart ? '…' : '') + text.slice(previewStart), query));

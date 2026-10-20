@@ -201,3 +201,34 @@ test('web view: scan, select, warnings, safe source, empty result, retry and mob
   assert.equal(await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
   assert.equal(app.reads.length, 10, 'selection never refetches files');
 });
+
+
+test('web view: Unicode lowercase expansion preserves highlights and description excerpts', async (t) => {
+  const app = await webFixture({
+    '.agents/skills/unicode/SKILL.md': `---\nname: İstanbul skill\ndescription: '${'İ'.repeat(50)} Needle'\n---\n`,
+  });
+  t.after(app.close);
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(app.url);
+  await page.getByLabel('GitHub repository', { exact: true }).fill('https://github.com/Test/skills');
+  await page.getByRole('button', { name: /Explore repository/ }).click();
+  const filter = page.getByRole('searchbox', { name: 'Filter skills' });
+  const list = page.getByRole('navigation', { name: 'Skills' });
+  await filter.fill('skill');
+  await expect(list.locator('strong mark')).toHaveText('skill');
+  await expect(list.locator('strong')).toHaveText('İstanbul skill');
+  await filter.fill('needle');
+  await expect(page.locator('#skill-count')).toHaveText('1 of 1');
+  await expect(list.locator('span mark')).toHaveText('Needle');
+  assert.equal(await list.locator('span mark').evaluate((mark) => {
+    const parent = mark.parentElement!.getBoundingClientRect();
+    const rect = mark.getBoundingClientRect();
+    return rect.top >= parent.top && rect.bottom <= parent.bottom;
+  }), true);
+  await filter.fill('i');
+  await expect(list.locator('strong mark')).toHaveText(['İ', 'i']);
+  await expect(list.locator('strong')).toHaveText('İstanbul skill');
+  await expect(list.locator('span')).toHaveText(`${'İ'.repeat(50)} Needle`);
+});

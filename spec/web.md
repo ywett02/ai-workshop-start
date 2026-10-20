@@ -27,7 +27,8 @@ the port. The server binds to loopback. No build step is required.
   trim surrounding query whitespace. An empty query shows all skills in scan order.
 - Highlight matching text in names and descriptions without interpreting repository
   text or the query as HTML or regular expressions. If a description match is beyond
-  its usual preview, show an excerpt around that match.
+  its usual preview, show an excerpt around that match. Preserve original character
+  boundaries when lowercasing expands Unicode characters (for example, `İ`).
 - Show and announce the matching count out of the repository total while filtering.
   Preserve the selected skill if it still matches; otherwise select the first match.
   No matches shows an explicit message and hides the previous skill document.
