@@ -3,6 +3,45 @@ import { test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
 import { COMMIT, CONTENT, webFixture } from './web-helpers.ts';
 
+test('web view: selected descriptions wrap long URLs and unbroken words on mobile and desktop', async (t) => {
+  const descriptions = ['https://example.com/' + 'a'.repeat(500), 'b'.repeat(500)];
+  const app = await webFixture(Object.fromEntries(descriptions.map((description, index) => [
+    `.agents/skills/long-${index}/SKILL.md`,
+    `---\nname: Long description ${index}\ndescription: "${description}"\n---\nSource\n`,
+  ])));
+  t.after(app.close);
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
+  t.after(() => browser.close());
+  for (const width of [375, 1280]) {
+    const page = await browser.newPage({ viewport: { width, height: 812 } });
+    await page.goto(app.url);
+    const input = page.getByLabel('GitHub repository', { exact: true });
+    await input.fill('https://github.com/Test/skills');
+    await input.press('Enter');
+    const description = page.locator('#skill-description');
+    for (const [index, text] of descriptions.entries()) {
+      if (index > 0) await page.getByRole('button', { name: `Long description ${index}` }).click();
+      await expect(description).toHaveText(text);
+      const layout = await description.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const range = element.ownerDocument.createRange();
+        range.selectNodeContents(element);
+        const fragments = [...range.getClientRects()];
+        return {
+          fits: element.scrollWidth <= element.clientWidth,
+          wraps: fragments.length > 1,
+          readable: fragments.every((rect) => rect.left >= bounds.left && rect.right <= bounds.right + 1
+            && rect.top >= bounds.top && rect.bottom <= bounds.bottom + 1),
+        };
+      });
+      assert.deepEqual(layout, { fits: true, wraps: true, readable: true },
+        `description ${index} must remain fully readable at ${width} px`);
+      assert.equal(await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
+    }
+    await page.close();
+  }
+});
+
 test('web view: live skill filtering, highlights, selection, counts, clear and scan reset', async (t) => {
   const app = await webFixture();
   t.after(app.close);
