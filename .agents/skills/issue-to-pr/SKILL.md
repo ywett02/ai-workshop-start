@@ -15,7 +15,13 @@ Turn one GitHub issue into a merge-ready pull request: spec, code, integration t
 
 ## Asking questions
 
-Ask every question about the task in the `#ikvl` channel of the `aiworkshopatjetbrains.slack.com` Slack workspace, not only in your reply. This applies at any step, including mid-implementation. Write one self-contained message: the issue link, what is unclear, the options you see, and the one you recommend. Send it with `SLACK_BOT_TOKEN`; the environment is already set up for this. The answer comes as a reply in the message's thread. If sending fails, ask the user directly and mention the error.
+Ask every question about the task in Slack, not only in your reply. This applies at any step, including mid-implementation. Use exactly:
+
+- Workspace: `aiworkshopatjetbrains.slack.com`
+- Channel: `#ikvl`, ID `C0CB0V63J68` (always address it by this ID)
+- Token: the `SLACK_BOT_TOKEN` environment variable
+
+Write one self-contained message: the issue link, what is unclear, the options you see, and the one you recommend. The environment is already set up to send it. The answer comes as a reply in the message's thread. If sending fails, ask the user directly and mention the error.
 
 Work only on parts the answer cannot change while you wait. Follow the answer, and quote it in the PR description.
 
