@@ -13,6 +13,10 @@ the port. The server binds to loopback. No build step is required.
   name, description, canonical path, copy paths, GitHub link pinned to the scanned
   commit, and complete canonical SKILL.md source including front matter. Read the
   contents during the scan without fetching a second time.
+- Wrap long URLs and other unbroken words in the selected skill's full description
+  within the document width on desktop and narrow screens (including 375 px).
+  Keep every character readable without horizontal page scrolling or clipping;
+  skill-list descriptions remain previews.
 - In the selected skill's details, show “Last updated” as an absolute UTC date and
   time, with a machine-readable timestamp. Use the committer date of the latest
   commit affecting the canonical SKILL.md, looking back from the scanned commit;
