@@ -26,6 +26,10 @@ copy paths. The ID uses the canonical path, not the display name.
 - Local scans inspect the current directory and use file links; commit is empty
 - Missing, unclosed, malformed, or non-mapping front matter → a *warning*, the
   directory name and an empty description; the scan goes on
+- YAML conversion failures, including unresolved aliases in any metadata field,
+  follow the same fallback: warn with the file path, preserve the skill's source,
+  and return both the affected skill and unrelated valid skills. The web scan
+  returns HTTP 200 with these results rather than failing the whole repository.
 - An unreadable skill file → a warning; skip that occurrence
 - Unreachable repository → a clear message, exit code 1
 - An incomplete listing → a warning that the result may omit project skills;
