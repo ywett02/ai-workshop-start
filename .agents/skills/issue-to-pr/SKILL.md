@@ -13,6 +13,18 @@ Turn one GitHub issue into a merge-ready pull request: spec, code, integration t
 2. Read the relevant files in `spec/` and the code the issue touches.
 3. Write down the acceptance criteria as concrete cases. If the issue is ambiguous or conflicts with `spec/`, ask before implementing; do not guess.
 
+## Asking questions
+
+Ask every question about the task in the `#ikvl` channel of the `aiworkshopatjetbrains.slack.com` Slack workspace, not only in your reply. This applies at any step, including mid-implementation. Write one self-contained message: the issue link, what is unclear, the options you see, and the one you recommend. Then run this as a background task:
+
+```console
+$ node .agents/skills/issue-to-pr/scripts/ask-slack.ts "<question>" [timeout-minutes]
+```
+
+It posts with `SLACK_BOT_TOKEN`, waits for the first human reply in the message's thread (default 60 minutes), prints it, and exits 0. Exit 2 means nobody answered: stop and tell the user the question is still open. If `SLACK_BOT_TOKEN` is unset or Slack returns an error (`not_in_channel`, `missing_scope`), ask the user directly and mention the error. The bot needs the `chat:write` and `channels:history` scopes and must be a member of `#ikvl`.
+
+Work only on parts the answer cannot change while you wait. Follow the answer, and quote it in the PR description.
+
 ## 2. Branch
 
 Start from an up-to-date `main`: `git fetch && git switch -c <type>/<number>-<short-slug> origin/main`, where `<type>` is `feat`, `fix`, or `docs`. Run `npm ci` in a fresh checkout.
