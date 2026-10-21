@@ -29,6 +29,28 @@ test('web API reuses project discovery and returns canonical source from the sca
   assert.equal(new Set(app.reads).size, app.reads.length, 'contents are not fetched again');
 });
 
+for (const field of ['name', 'extra']) {
+  test(`web API isolates an unresolved YAML alias in ${field} and returns both skills`, async (t) => {
+    const path = '.agents/skills/broken/SKILL.md';
+    const content = `---\n${field}: *missing\ndescription: Discard this metadata.\n---\n# Instructions\n`;
+    const app = await webFixture({
+      [path]: content,
+      '.agents/skills/safe/SKILL.md': '---\nname: Safe\ndescription: Ordinary skill\n---\nSafe source',
+    });
+    t.after(app.close);
+    const response = await fetch(`${app.url}/api/scan?repository=https://github.com/Test/skills`);
+    assert.equal(response.status, 200);
+    const result = await response.json() as WebResult;
+    assert.deepEqual(result.skills.map(({ name, description }) => ({ name, description })), [
+      { name: 'Safe', description: 'Ordinary skill' },
+      { name: 'broken', description: '' },
+    ]);
+    assert.equal(result.skills[1].content, content);
+    assert.ok(result.warnings.some((warning) => warning.startsWith(`${path}: malformed front matter:`)
+      && warning.includes('Unresolved alias') && warning.includes('using the directory name')), result.warnings.join('\n'));
+  });
+}
+
 test('web API rejects invalid inputs and preserves safe, useful failure messages', async (t) => {
   const app = await webFixture();
   t.after(app.close);

@@ -197,6 +197,7 @@ for (const [label, contents] of [
   ['missing front matter', '# Check\n'],
   ['unclosed front matter', '---\nname: display\n'],
   ['malformed YAML', '---\nname: [broken\n---\n'],
+  ['unresolved YAML alias', '---\nname: *missing\ndescription: Discard this metadata.\n---\n# Instructions\n'],
   ['non-mapping front matter', '---\n- display\n---\n'],
 ] as const) {
   test(`${label}: warn, use the directory name, and keep scanning`, (t) => {
