@@ -185,14 +185,16 @@ async function showOrganization(response) {
   };
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffered = '';
-  for (;;) {
+  stream: for (;;) {
     // A broken connection rejects instead of ending; both leave the scan unfinished.
     const { value, done } = await reader.read().catch(() => ({ done: true }));
     if (done) break;
     const lines = (buffered + value).split('\n');
     buffered = lines.pop();
     for (const line of lines.filter(Boolean)) {
-      const event = JSON.parse(line);
+      let event;
+      try { event = JSON.parse(line); }
+      catch { break stream; } // Malformed lines also leave the scan unfinished.
       if (event.type === 'start') start = event;
       else if (event.type === 'done') finished = true;
       else if (event.type === 'repository') {
@@ -203,7 +205,13 @@ async function showOrganization(response) {
     }
     if (start) update();
   }
-  if (!finished) throw new Error('The organization scan stopped early; results may be incomplete. Please try again.');
+  await reader.cancel().catch(() => {});
+  reader.releaseLock();
+  if (!finished) {
+    // Keep valid events preceding a malformed line in the same received chunk.
+    if (start) update();
+    throw new Error('The organization scan stopped early; results may be incomplete. Please try again.');
+  }
 }
 
 filter.addEventListener('input', renderSkills);

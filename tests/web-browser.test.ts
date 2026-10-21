@@ -339,7 +339,7 @@ test('organization view: skills appear while other repositories are still being 
   await expect(input).toBeEnabled();
 });
 
-for (const ending of ['a broken connection', 'an early end']) test(`organization view: ${ending} keeps results and says they may be incomplete`, async (t) => {
+for (const ending of ['a broken connection', 'an early end', 'a malformed line', 'a malformed line in the same chunk', 'a malformed first line']) test(`organization view: ${ending} keeps results and says they may be incomplete`, async (t) => {
   const { createServer } = await import('node:http');
   const { listen } = await import('./web-helpers.ts');
   const { createWebServer } = await import('../src/server.ts');
@@ -350,24 +350,52 @@ for (const ending of ['a broken connection', 'an early end']) test(`organization
     { type: 'repository', id: 'Example/a', result: { repository: { id: 'Example/a', commit: COMMIT }, skills: [skill], warnings: [] }, warnings: [] },
   ];
   // Only the scan is replaced; the page and its assets come from the real server.
+  let attempts = 0;
   const app = await listen(createServer((request, response) => {
     if (!request.url?.startsWith('/api/scan')) return void web.emit('request', request, response);
     response.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8' });
-    response.write(lines.map((line) => `${JSON.stringify(line)}\n`).join(''));
+    if (attempts++ > 0) {
+      return void response.end([
+        { ...lines[0], repositoryCount: 1 }, lines[1], { type: 'done' },
+      ].map((line) => `${JSON.stringify(line)}\n`).join(''));
+    }
+    const valid = lines.map((line) => `${JSON.stringify(line)}\n`).join('');
+    const malformed = '{"type":"repository", "id":\n';
+    if (ending === 'a malformed first line') return void response.end(malformed);
+    if (ending === 'a malformed line in the same chunk') return void response.end(valid + malformed);
+    response.write(valid);
     if (ending === 'an early end') response.end();
+    else if (ending === 'a malformed line') setTimeout(() => response.write(malformed), 100);
     else setTimeout(() => response.destroy(), 100);
   }));
   t.after(app.close);
   const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
   t.after(() => browser.close());
   const page = await browser.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(app.url);
   await page.getByLabel('Scan scope').selectOption('organization');
   const input = page.getByLabel('GitHub organization', { exact: true });
   await input.fill('Example');
   await input.press('Enter');
   await expect(page.locator('#status')).toHaveText('The organization scan stopped early; results may be incomplete. Please try again.');
-  await expect(page.getByRole('navigation', { name: 'Skills' }).getByRole('button')).toHaveText([/Alpha/]);
-  await expect(page.locator('#repository-info')).toContainText('1 of 2 repositories scanned');
+  if (ending === 'a malformed first line') {
+    await expect(page.getByRole('navigation', { name: 'Skills' }).getByRole('button')).toHaveCount(0);
+  } else {
+    await expect(page.getByRole('navigation', { name: 'Skills' }).getByRole('button')).toHaveText([/Alpha/]);
+    await expect(page.locator('#repository-info')).toContainText('1 of 2 repositories scanned');
+    await expect(page.locator('#skill-content')).toHaveText('Source');
+    await page.getByRole('searchbox', { name: 'Filter skills' }).fill('Alpha');
+    await expect(page.locator('#skill-count')).toHaveText('1 of 1');
+  }
   await expect(input).toBeEnabled();
+  await expect(page.getByLabel('Scan scope')).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Explore organization' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Explore organization' }).click();
+  await expect(page.locator('#status')).toHaveText('1 project skill in Example');
+  await expect(page.locator('#repository-info')).toContainText('1 of 1 repositories scanned');
+  await expect(page.getByRole('searchbox', { name: 'Filter skills' })).toHaveValue('');
+  assert.equal(attempts, 2);
+  assert.deepEqual(errors, []);
 });
