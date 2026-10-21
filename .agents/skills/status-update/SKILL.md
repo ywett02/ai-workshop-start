@@ -9,8 +9,15 @@ List the pull requests merged and the issues resolved since a given time and dat
 
 ## 1. Pin down the start time
 
-1. Take the time and date from the request. If it has no time, use 00:00. If it has no time zone, use the local one (`date +%z`).
-2. Convert it to UTC ISO 8601, for example `2026-10-20T07:00:00Z`. Call it `<since>`.
+1. Take the time and date from the request. If it has no time, use 00:00. If it has no time zone, interpret it in the local named time zone at the requested date, including that date's daylight-saving rules. Do not attach today's numeric UTC offset.
+2. Convert that instant to UTC ISO 8601, for example `2026-10-20T07:00:00Z`. Call it `<since>`. With GNU `date`, set `start` to the supplied date and time (preserving any explicit time zone), then run:
+
+   ```sh
+   local_start=$(date --date="$start" --iso-8601=seconds) || exit 1
+   date --utc --date="$local_start" '+%Y-%m-%dT%H:%M:%SZ'
+   ```
+
+   The first command resolves a zone-less input using the local zone (`TZ` when set, otherwise the system zone); only the second converts to UTC. For example, `2026-01-15 00:00` in `America/New_York` becomes `2026-01-15T05:00:00Z`, while `2026-07-15 00:00` becomes `2026-07-15T04:00:00Z`.
 3. If no date was given at all, ask the user; do not guess a period.
 
 ## 2. Collect
